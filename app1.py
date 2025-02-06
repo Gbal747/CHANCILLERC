@@ -11,8 +11,6 @@ from kivy.uix.popup import Popup
 # LÓGICA DEL JUEGO (adaptada de tus archivos originales)
 # =====================================================
 
-# Definición de la carta y de la baraja
-
 class Carta:
     def __init__(self, nombre, valor, descripcion):
         self.nombre = nombre
@@ -90,8 +88,6 @@ def barajar(baraja):
     random.shuffle(baraja)
     return baraja
 
-# Clase Jugador
-
 class Jugador:
     def __init__(self, nombre):
         self.nombre = nombre
@@ -150,7 +146,7 @@ class GameScreen(Screen):
 
         # Layout principal (vertical)
         self.layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
-        # Etiqueta de información (quién es el turno actual, etc.)
+        # Etiqueta de información (turno actual, etc.)
         self.info_label = Label(text="Información del juego", size_hint=(1, 0.1))
         self.layout.add_widget(self.info_label)
         # Layout para la mano del jugador (se llenará con botones)
@@ -185,14 +181,15 @@ class GameScreen(Screen):
         self.hand_layout.clear_widgets()
         if self.current_player:
             self.info_label.text = f"Turno de: {self.current_player.nombre}"
-            # Crear un botón por cada carta en la mano del jugador actual
+            # Mostrar un botón por cada carta en la mano
             for carta in self.current_player.mano:
                 btn = Button(text=str(carta), size_hint=(None, 1), width=150)
-                btn.bind(on_press=lambda instance, c=carta: self.on_card_selected(c))
+                # Al pulsar la carta se muestra un popup con sus detalles
+                btn.bind(on_press=lambda instance, c=carta: self.show_card_details(c))
                 self.hand_layout.add_widget(btn)
 
     def next_turn(self, instance=None):
-        # Verificar si ya hay un ganador antes de iniciar el siguiente turno
+        # Verificar si ya hay un ganador antes de continuar
         if self.check_winner():
             return
         # Seleccionar el siguiente jugador activo (no eliminado)
@@ -203,14 +200,14 @@ class GameScreen(Screen):
                 break
         # Al inicio del turno se elimina la protección
         self.current_player.protegido = False
-        # El jugador roba una carta (si la baraja no está vacía)
+        # Robar una carta si es posible
         if self.deck:
             drawn = self.deck.pop(0)
             self.current_player.mano.append(drawn)
             self.log(f"{self.current_player.nombre} roba: {drawn}")
         else:
             self.log("La baraja se ha agotado.")
-        # Si se tiene la regla de la Condesa (tener Condesa y Rey/Príncipe) se fuerza su juego
+        # Verificar la regla de la Condesa: si en la mano hay Condesa junto a Rey o Príncipe, se debe jugar la Condesa
         if any(carta.nombre == "Condesa" for carta in self.current_player.mano) and \
            any(carta.nombre in ["Rey", "Príncipe"] for carta in self.current_player.mano):
             for carta in self.current_player.mano:
@@ -220,7 +217,24 @@ class GameScreen(Screen):
                     return
         self.update_ui()
 
-    def on_card_selected(self, carta):
+    def show_card_details(self, carta):
+        # Crea un popup que muestra los detalles de la carta y pregunta si se desea jugarla
+        layout = BoxLayout(orientation='vertical', spacing=10, padding=10)
+        info_text = f"Nombre: {carta.nombre}\nValor: {carta.valor}\nDescripción: {carta.descripcion}"
+        layout.add_widget(Label(text=info_text))
+        btn_layout = BoxLayout(orientation='horizontal', spacing=10, size_hint_y=None, height=40)
+        play_btn = Button(text="Jugar")
+        cancel_btn = Button(text="Cancelar")
+        btn_layout.add_widget(play_btn)
+        btn_layout.add_widget(cancel_btn)
+        layout.add_widget(btn_layout)
+        popup = Popup(title="Detalles de la carta", content=layout, size_hint=(None, None), size=(400, 300))
+        play_btn.bind(on_press=lambda inst: self.confirm_play_card(carta, popup))
+        cancel_btn.bind(on_press=popup.dismiss)
+        popup.open()
+
+    def confirm_play_card(self, carta, popup):
+        popup.dismiss()
         self.play_card(carta)
 
     def play_card(self, carta):
@@ -228,7 +242,7 @@ class GameScreen(Screen):
             self.current_player.mano.remove(carta)
             self.log(f"{self.current_player.nombre} juega: {carta}")
             self.apply_effect(carta, self.current_player)
-            # Luego de aplicar el efecto se verifica el estado del juego y se avanza el turno
+            # Después de aplicar el efecto se verifica el estado del juego y se avanza el turno
             self.check_winner()
             self.next_turn()
         else:
@@ -266,7 +280,7 @@ class GameScreen(Screen):
     # -----------------------------
 
     def show_guardia_popup(self, jugador_actual, carta):
-        # Objetivos: jugadores (distintos al actual) que estén activos y no protegidos.
+        # Objetivos: jugadores distintos al actual que estén activos y no protegidos
         targets = [j for j in self.players if j != jugador_actual and not j.eliminado and not j.protegido]
         if not targets:
             self.log("No hay objetivos disponibles para el Guardia.")
@@ -292,7 +306,6 @@ class GameScreen(Screen):
                 guess = guess_input.text.strip().lower()
                 target = selected_target["target"]
                 if any(c.nombre.lower() == guess for c in target.mano):
-                    # Si la carta adivinada es un Guardia, no se elimina
                     if any(c.nombre.lower() == "guardia" for c in target.mano):
                         self.log(f"{target.nombre} tiene un Guardia, no puede ser eliminado.")
                     else:
@@ -316,7 +329,6 @@ class GameScreen(Screen):
         content = BoxLayout(orientation='vertical', spacing=10, padding=10)
         content.add_widget(Label(text="Selecciona el jugador cuya mano deseas ver:"))
         target_buttons = BoxLayout(orientation='vertical', spacing=5)
-        # Nota: en este ejemplo, al pulsar se muestra la mano y se cierra el popup.
         for target in targets:
             btn = Button(text=target.nombre, size_hint_y=None, height=40)
             btn.bind(on_press=lambda inst, t=target: self.sacerdote_selected(t, popup))
@@ -346,7 +358,6 @@ class GameScreen(Screen):
         popup.open()
 
     def baron_selected(self, jugador_actual, target, popup):
-        # Para el efecto del Barón, se compara la carta que quedó en mano (ya que se jugó una)
         if target.mano:
             if len(jugador_actual.mano) == 0:
                 self.log(f"{jugador_actual.nombre} no tiene cartas para comparar.")
@@ -367,7 +378,6 @@ class GameScreen(Screen):
         popup.dismiss()
 
     def show_principe_popup(self, jugador_actual, carta):
-        # Para el Príncipe, se debe elegir un jugador que descarte su mano.
         targets = [j for j in self.players if not j.eliminado]
         if not targets:
             self.log("No hay objetivos disponibles para el Príncipe.")
@@ -417,7 +427,6 @@ class GameScreen(Screen):
 
     def rey_selected(self, jugador_actual, target, popup):
         if jugador_actual.mano and target.mano:
-            # Se intercambia la carta en mano (ya que tras jugar se tiene 1 carta)
             jugador_actual.mano[0], target.mano[0] = target.mano[0], jugador_actual.mano[0]
             self.log(f"{jugador_actual.nombre} y {target.nombre} han intercambiado sus manos.")
         else:
