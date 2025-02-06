@@ -12,25 +12,42 @@ def aplicar_efecto(carta, jugador_actual, jugadores, baraja):
     if carta.nombre == "Guardia":
         # Efecto: Adivinar la carta de otro jugador.
         print(f"{jugador_actual.nombre} juega {carta.nombre}")
+    
         # Se muestran solo los jugadores activos (no eliminados) y que no estén protegidos.
         objetivos = [j for j in jugadores if j != jugador_actual and not j.eliminado and not j.protegido]
+    
         if not objetivos:
             print("No hay objetivos disponibles para el Guardia.")
             return
+    
         print("Selecciona el jugador al que deseas adivinar su carta:")
         for idx, obj in enumerate(objetivos):
             print(f"  {idx + 1}. {obj.nombre}")
-        eleccion = int(input("Elige el número del jugador: "))
+    
+        # Pedir al jugador que elija un objetivo
+        try:
+            eleccion = int(input("Elige el número del jugador: "))
+            if eleccion < 1 or eleccion > len(objetivos):
+                print("Por favor, elige un jugador válido.")
+                return
+        except ValueError:
+            print("Debes ingresar un número válido.")
+            return
+
         objetivo = objetivos[eleccion - 1]
         adivinanza = input("¿Qué carta crees que tiene? (escribe el nombre): ")
-        if any(c.nombre.lower() == adivinanza for c in objetivo.mano):
-          if adivinanza == "guardia":  # 💡 Aquí evitamos que se elimine si es un Guardia
-            print(f"{objetivo.nombre} tenía un Guardia, no puede ser eliminado.")
+
+        # Verificar si la adivinanza es correcta
+        if any(c.nombre.lower() == adivinanza.lower() for c in objetivo.mano):
+            # Comprobar si la carta adivinada es un Guardia
+            if any(c.nombre.lower() == "guardia" for c in objetivo.mano):
+                print(f"{objetivo.nombre} tiene un Guardia, no puede ser eliminado por un Guardia.")
+            else:
+                # Si no es un Guardia, eliminar al jugador
+                print(f"¡Correcto! {objetivo.nombre} tenía {adivinanza} y queda eliminado.")
+                objetivo.eliminado = True
         else:
-          print(f"¡Correcto! {objetivo.nombre} tenía {adivinanza} y queda eliminado.")
-        objetivo.eliminado = True
-        print("Adivinaste mal. No ocurre nada.")
-    
+            print("Adivinaste mal. No ocurre nada.")
     elif carta.nombre == "Sacerdote":
         # Efecto: Mirar la mano de otro jugador.
         print(f"{jugador_actual.nombre} juega {carta.nombre}")
@@ -98,49 +115,54 @@ def aplicar_efecto(carta, jugador_actual, jugadores, baraja):
                 print("La baraja está vacía. No se puede robar una nueva carta.")
 
     elif carta.nombre == "Chanciller":
-    # Efecto: Robar dos cartas y elegir una para conservar.
         print(f"{jugador_actual.nombre} juega {carta.nombre}")
 
-    if len(baraja) >= 2:
-        cartas_robadas = [baraja.pop(0) for _ in range(2)]  # Roba dos cartas de la baraja
-        cartas_totales = jugador_actual.mano + cartas_robadas  # Incluye su carta actual
+        if len(baraja) >= 2:
+            cartas_robadas = [baraja.pop(0) for _ in range(2)] #Robar dos cartas
+            cartas_totales = jugador_actual.mano + cartas_robadas #Incluye la carta actual
 
-        print("Tienes las siguientes cartas:")
-        for idx, c in enumerate(cartas_totales):
-            print(f"  {idx + 1}. {c.nombre}")  # Muestra todas las cartas disponibles
-
-        try:
-            eleccion = int(input("Elige la carta que deseas conservar (1, 2 o 3): ")) - 1
-            if eleccion < 0 or eleccion >= len(cartas_totales):
-                print("Selección inválida.")
+            #Aseguramos que tenemos 3 cartas
+            if len(cartas_totales) !=3:
+                print(f"Error:El numero de cartas no es correcto")
                 return
-        except ValueError:
-            print("Debes ingresar un número válido.")
-            return
 
-        # Se queda con la carta elegida
-        jugador_actual.mano = [cartas_totales[eleccion]]
+            print("Tienes las siguientes cartas:")
+            for idx, c in enumerate(cartas_totales):
+                print(f"{idx + 1}. {c.nombre}")
 
-        # Las dos restantes deben colocarse en el orden que el jugador elija
-        cartas_restantes = [c for i, c in enumerate(cartas_totales) if i != eleccion]
-
-        print("Debes colocar las dos cartas restantes al final del mazo en el orden que quieras.")
-        print("Elige el orden de las siguientes cartas:")
-        print(f"  1. {cartas_restantes[0].nombre}")
-        print(f"  2. {cartas_restantes[1].nombre}")
-
-        try:
-            orden = int(input("Elige qué carta irá primero en el mazo (1 o 2): ")) - 1
-            if orden not in [0, 1]:
-                print("Selección inválida.")
+            try: 
+                eleccion = int(input("Elige la carta que deseas conservar (1, 2 o 3): "))
+                if eleccion < 1 or eleccion >= 3:
+                    print("La elección no es válida.")
+                    return
+            except ValueError:
+                print("La elección debe ser un número.")
                 return
-        except ValueError:
-            print("Debes ingresar un número válido.")
-            return
-        # Coloca las cartas en el mazo en el orden elegido
-        baraja.append(cartas_restantes[orden])  # La primera seleccionada va al final
-        baraja.append(cartas_restantes[1 - orden])  # La segunda seleccionada después
-        print("No hay suficientes cartas en la baraja para el efecto del Chanciller.")
+
+            #se queda con la carta elegida
+            jugador_actual.mano = [cartas_totales[eleccion - 1]]
+
+            #Las cartas restantes se colocan en el orden que el jugador quiera
+            cartas_restanres = [c for idx, c in enumerate(cartas_totales) if idx != eleccion] 
+
+            print("Debes elegir el orden de las cartas restantes al final del mazo en el orden que quieras.")
+            print(f" 1. {cartas_restanres[0].nombre}")
+            print(f" 2. {cartas_restanres[1].nombre}")
+
+            try:
+                orden = int(input("Elige el orden de las cartas (1 o 2): "))
+                if orden < 1 or orden > 2:
+                    print("La elección no es válida.")
+                    return
+            except ValueError:
+                print("Debes ingresar un número válido.")
+                return
+            #Coloca las cartas en el mazo en el orden elegido
+            baraja.append (cartas_restanres[orden - 1]) #Ajustamos el índice
+            baraja.append (cartas_restanres[1 - (orden - 1)]) # Coloca la carta restante en el otro orden
+        else:
+            print("No hay suficientes cartas en el mazo para robar.")
+        
     
     elif carta.nombre == "Rey":
         # Efecto: Intercambiar la mano con la de otro jugador.
@@ -161,17 +183,17 @@ def aplicar_efecto(carta, jugador_actual, jugadores, baraja):
     elif carta.nombre == "Condesa":
         # La Condesa no tiene efecto, pero se debe jugar obligatoriamente en ciertas condiciones.
         print(f"{jugador_actual.nombre} juega {carta.nombre}. Sin efecto adicional.")
-    
+        
     elif carta.nombre == "Princesa":
         # Efecto: Si se juega la Princesa, el jugador queda eliminado.
         print(f"{jugador_actual.nombre} juega {carta.nombre} y queda eliminado.")
         jugador_actual.eliminado = True
-
+    
     elif carta.nombre == "Espía":
         # Para el Espía, si no se define un efecto concreto, se deja un mensaje.
         print(f"{jugador_actual.nombre} juega {carta.nombre}.")
         print("El efecto del Espía aún no se ha implementado.")
-    
+        
     else:
         print(f"{carta.nombre} no tiene un efecto implementado.")
 
@@ -214,7 +236,15 @@ def jugar_turno(jugador_actual, jugadores, baraja):
                 eleccion = idx + 1
                 break
     else:
-        eleccion = int(input("Elige la carta a jugar (ingresa el número): "))
+        # Se solicita al jugador que elija la carta a jugar.
+        try:
+            eleccion = int(input("Elige el número de la carta que deseas jugar: "))
+            if eleccion < 1 or eleccion > len(jugador_actual.mano):
+                print("La elección no es válida.")
+                return
+        except ValueError:
+            print("La elección debe ser un número.")
+            return
 
     # Remover la carta jugada de la mano.
     carta_jugada = jugador_actual.mano.pop(eleccion - 1)
