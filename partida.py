@@ -274,7 +274,6 @@ def determinar_ganador(jugadores, baraja):
         
         ganador = max(activos, key=lambda j: j.mano[0].valor)
         return ganador
-    return None
 
 def main():
     # Solicitar número de jugadores.
