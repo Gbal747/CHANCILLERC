@@ -118,12 +118,12 @@ def aplicar_efecto(carta, jugador_actual, jugadores, baraja):
         print(f"{jugador_actual.nombre} juega {carta.nombre}")
 
         if len(baraja) >= 2:
-            cartas_robadas = [baraja.pop(0) for _ in range(2)] #Robar dos cartas
-            cartas_totales = jugador_actual.mano + cartas_robadas #Incluye la carta actual
+            cartas_robadas = [baraja.pop(0) for _ in range(2)]  # Robar dos cartas
+            cartas_totales = jugador_actual.mano + cartas_robadas  # Incluye la carta actual
 
-            #Aseguramos que tenemos 3 cartas
-            if len(cartas_totales) !=3:
-                print(f"Error:El numero de cartas no es correcto")
+            # Aseguramos que tenemos 3 cartas
+            if len(cartas_totales) != 3:
+                print(f"Error: El número de cartas no es correcto")
                 return
 
             print("Tienes las siguientes cartas:")
@@ -132,22 +132,22 @@ def aplicar_efecto(carta, jugador_actual, jugadores, baraja):
 
             try: 
                 eleccion = int(input("Elige la carta que deseas conservar (1, 2 o 3): "))
-                if eleccion < 1 or eleccion >= 3:
+                if eleccion < 1 or eleccion > 3:
                     print("La elección no es válida.")
                     return
             except ValueError:
                 print("La elección debe ser un número.")
                 return
 
-            #se queda con la carta elegida
+            # Se queda con la carta elegida
             jugador_actual.mano = [cartas_totales[eleccion - 1]]
 
-            #Las cartas restantes se colocan en el orden que el jugador quiera
-            cartas_restanres = [c for idx, c in enumerate(cartas_totales) if idx != eleccion] 
+            # Las cartas restantes se colocan en el orden que el jugador quiera
+            cartas_restantes = [c for idx, c in enumerate(cartas_totales) if idx != eleccion - 1]
 
             print("Debes elegir el orden de las cartas restantes al final del mazo en el orden que quieras.")
-            print(f" 1. {cartas_restanres[0].nombre}")
-            print(f" 2. {cartas_restanres[1].nombre}")
+            print(f" 1. {cartas_restantes[0].nombre}")
+            print(f" 2. {cartas_restantes[1].nombre}")
 
             try:
                 orden = int(input("Elige el orden de las cartas (1 o 2): "))
@@ -157,9 +157,9 @@ def aplicar_efecto(carta, jugador_actual, jugadores, baraja):
             except ValueError:
                 print("Debes ingresar un número válido.")
                 return
-            #Coloca las cartas en el mazo en el orden elegido
-            baraja.append (cartas_restanres[orden - 1]) #Ajustamos el índice
-            baraja.append (cartas_restanres[1 - (orden - 1)]) # Coloca la carta restante en el otro orden
+            # Coloca las cartas en el mazo en el orden elegido
+            baraja.append(cartas_restantes[orden - 1])  # Ajustamos el índice
+            baraja.append(cartas_restantes[1 - (orden - 1)])  # Coloca la carta restante en el otro orden
         else:
             print("No hay suficientes cartas en el mazo para robar.")
         
@@ -257,7 +257,7 @@ def determinar_ganador(jugadores, baraja):
     Determina si hay un ganador.
       - Si solo queda un jugador sin eliminar, ese es el ganador.
       - Si la baraja se ha agotado, se determina el ganador por el valor de la carta en mano.
-      -Si los dos últimos jugadores activos tienen la misma carta, ambos ganan.
+      - Si los dos últimos jugadores activos tienen la misma carta, ambos ganan.
       - En otro caso, devuelve None.
     """
     activos = [j for j in jugadores if not j.eliminado]
@@ -266,12 +266,12 @@ def determinar_ganador(jugadores, baraja):
     if not baraja:
         print("La baraja se ha agotado. Se determina el ganador por el valor de la carta en mano.")
         
-        if len
-            if activos[0].mano[0].valor == activos[1].mano[0].nombre:
+        # Si quedan dos jugadores y tienen la misma carta, ambos ganan.
+        if len(activos) == 2:
+            if activos[0].mano[0].valor == activos[1].mano[0].valor:
                 print(f"Ambos jugadores tienen la misma carta: {activos[0].mano[0]}. ¡Ambos ganan!")    
                 return activos
             
-        
         ganador = max(activos, key=lambda j: j.mano[0].valor)
         return ganador
 
