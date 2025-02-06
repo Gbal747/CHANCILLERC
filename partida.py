@@ -257,12 +257,18 @@ def determinar_ganador(jugadores, baraja):
     Determina si hay un ganador.
       - Si solo queda un jugador sin eliminar, ese es el ganador.
       - Si la baraja se ha agotado, se determina el ganador por el valor de la carta en mano.
+      - Si un único jugador activo ha jugado la carta Espía en la ronda, gana la ronda.
       - Si los dos últimos jugadores activos tienen la misma carta, ambos ganan.
       - En otro caso, devuelve None.
     """
     activos = [j for j in jugadores if not j.eliminado]
     if len(activos) == 1:
         return activos[0]
+    
+    jugadores_con_espia = [j for j in activos if j.cartas_jugadas and j.cartas_jugadas[-1].nombre == "Espía"]
+    if len(jugadores_con_espia) == 1:
+        print(f"{jugadores_con_espia[0].nombre} ha jugado la carta Espía y es el único. Gana la ronda.")
+        return jugadores_con_espia[0]
     if not baraja:
         print("La baraja se ha agotado. Se determina el ganador por el valor de la carta en mano.")
         
