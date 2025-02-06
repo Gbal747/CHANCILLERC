@@ -257,6 +257,7 @@ def determinar_ganador(jugadores, baraja):
     Determina si hay un ganador.
       - Si solo queda un jugador sin eliminar, ese es el ganador.
       - Si la baraja se ha agotado, se determina el ganador por el valor de la carta en mano.
+      -Si los dos últimos jugadores activos tienen la misma carta, ambos ganan.
       - En otro caso, devuelve None.
     """
     activos = [j for j in jugadores if not j.eliminado]
@@ -264,6 +265,13 @@ def determinar_ganador(jugadores, baraja):
         return activos[0]
     if not baraja:
         print("La baraja se ha agotado. Se determina el ganador por el valor de la carta en mano.")
+        
+        if len
+            if activos[0].mano[0].valor == activos[1].mano[0].nombre:
+                print(f"Ambos jugadores tienen la misma carta: {activos[0].mano[0]}. ¡Ambos ganan!")    
+                return activos
+            
+        
         ganador = max(activos, key=lambda j: j.mano[0].valor)
         return ganador
     return None
