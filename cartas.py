@@ -26,7 +26,7 @@ CARTAS_DEFINICION = {
     "Espía": {
         "cantidad": 2,
         "valor": 0,
-        "descripcion": "Efecto del Espía ()"
+        "descripcion": "Efecto del Espía (Al final de la ronda, si eres el único jugador sin eliminar que ha jugado una carta de Espía, ganas también la ronda)"
     },
     "Guardia": {
         "cantidad": 6,
@@ -66,12 +66,12 @@ CARTAS_DEFINICION = {
     "Condesa": {
         "cantidad": 1,
         "valor": 8,
-        "descripcion": "Efecto de la Condesa (La Condesa no tiene efecto, pero deberá ser descartada si tuvieras en tu mano el Rey o el Príncipe)"
+        "descripcion": "Efecto de la Condesa (La Condesa no tiene efecto, pero deberá ser jugada si tuvieras en tu mano el Rey o el Príncipe)"
     },
     "Princesa": {
         "cantidad": 1,
         "valor": 9,
-        "descripcion": "Efecto de la Princesa (La Princesa quedará eliminda si es descartada)"
+        "descripcion": "Efecto de la Princesa (La Princesa quedará eliminda si es jugada)"
     }
 }
 
