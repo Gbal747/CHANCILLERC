@@ -31,7 +31,7 @@ CARTAS_DEFINICION = {
     "Guardia": {
         "cantidad": 6,
         "valor": 1,
-        "descripcion": "Efecto del Guardia (La Guardia tiene la misión de adivinar la mano de otro jugador, si lo adivina el otro jugador queda eliminado)"
+        "descripcion": "Efecto del Guardia (La Guardia tiene la misión de adivinar la mano de otro jugador, si lo adivina el otro jugador queda eliminado (in incluir el Guardia))"
     },
     "Sacerdote": {
         "cantidad": 2,
@@ -56,7 +56,7 @@ CARTAS_DEFINICION = {
     "Chanciller": {
         "cantidad": 2,
         "valor": 6,
-        "descripcion": "Efecto del Chanciller (El Chanciller puede robar dos cartas del mazo de las cuales debera quedarse con una y colocar las dos restantes al final del mazo en el oden que quiera)"
+        "descripcion": "Efecto del Chanciller (El Chanciller puede robar dos cartas del mazo, a continuación, elige y conserva una de las tres cartas que tiene y colocar las dos restantes al final del mazo en el orden que quiera)"
     },
     "Rey": {
         "cantidad": 1,
