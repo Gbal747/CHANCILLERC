@@ -23,12 +23,13 @@ def aplicar_efecto(carta, jugador_actual, jugadores, baraja):
         eleccion = int(input("Elige el número del jugador: "))
         objetivo = objetivos[eleccion - 1]
         adivinanza = input("¿Qué carta crees que tiene? (escribe el nombre): ")
-        # Si el oponente tiene la carta que se adivinó, queda eliminado.
-        if any(c.nombre.lower() == adivinanza.lower() for c in objetivo.mano):
-            print(f"¡Correcto! {objetivo.nombre} tenía {adivinanza} y queda eliminado.")
-            objetivo.eliminado = True
+        if any(c.nombre.lower() == adivinanza for c in objetivo.mano):
+          if adivinanza == "guardia":  # 💡 Aquí evitamos que se elimine si es un Guardia
+            print(f"{objetivo.nombre} tenía un Guardia, no puede ser eliminado.")
         else:
-            print("Adivinaste mal. No ocurre nada.")
+          print(f"¡Correcto! {objetivo.nombre} tenía {adivinanza} y queda eliminado.")
+        objetivo.eliminado = True
+        print("Adivinaste mal. No ocurre nada.")
     
     elif carta.nombre == "Sacerdote":
         # Efecto: Mirar la mano de otro jugador.
@@ -97,19 +98,49 @@ def aplicar_efecto(carta, jugador_actual, jugadores, baraja):
                 print("La baraja está vacía. No se puede robar una nueva carta.")
 
     elif carta.nombre == "Chanciller":
-        # Efecto: Robar dos cartas y elegir una para quedarse.
+    # Efecto: Robar dos cartas y elegir una para conservar.
         print(f"{jugador_actual.nombre} juega {carta.nombre}")
-        if len(baraja) >= 2:
-            cartas_robadas = [baraja.pop(0) for _ in range(2)]
-            print("Cartas robadas:")
-            for idx, c in enumerate(cartas_robadas):
-                print(f"  {idx + 1}. {c}")
-            eleccion = int(input("Elige la carta que deseas conservar (1 o 2): "))
-            jugador_actual.mano.append(cartas_robadas[eleccion - 1])
-            # La carta no elegida se coloca al final de la baraja.
-            baraja.append(cartas_robadas[1 - (eleccion - 1)])
-        else:
-            print("No hay suficientes cartas en la baraja para el efecto del Chanciller.")
+
+    if len(baraja) >= 2:
+        cartas_robadas = [baraja.pop(0) for _ in range(2)]  # Roba dos cartas de la baraja
+        cartas_totales = jugador_actual.mano + cartas_robadas  # Incluye su carta actual
+
+        print("Tienes las siguientes cartas:")
+        for idx, c in enumerate(cartas_totales):
+            print(f"  {idx + 1}. {c.nombre}")  # Muestra todas las cartas disponibles
+
+        try:
+            eleccion = int(input("Elige la carta que deseas conservar (1, 2 o 3): ")) - 1
+            if eleccion < 0 or eleccion >= len(cartas_totales):
+                print("Selección inválida.")
+                return
+        except ValueError:
+            print("Debes ingresar un número válido.")
+            return
+
+        # Se queda con la carta elegida
+        jugador_actual.mano = [cartas_totales[eleccion]]
+
+        # Las dos restantes deben colocarse en el orden que el jugador elija
+        cartas_restantes = [c for i, c in enumerate(cartas_totales) if i != eleccion]
+
+        print("Debes colocar las dos cartas restantes al final del mazo en el orden que quieras.")
+        print("Elige el orden de las siguientes cartas:")
+        print(f"  1. {cartas_restantes[0].nombre}")
+        print(f"  2. {cartas_restantes[1].nombre}")
+
+        try:
+            orden = int(input("Elige qué carta irá primero en el mazo (1 o 2): ")) - 1
+            if orden not in [0, 1]:
+                print("Selección inválida.")
+                return
+        except ValueError:
+            print("Debes ingresar un número válido.")
+            return
+        # Coloca las cartas en el mazo en el orden elegido
+        baraja.append(cartas_restantes[orden])  # La primera seleccionada va al final
+        baraja.append(cartas_restantes[1 - orden])  # La segunda seleccionada después
+        print("No hay suficientes cartas en la baraja para el efecto del Chanciller.")
     
     elif carta.nombre == "Rey":
         # Efecto: Intercambiar la mano con la de otro jugador.
