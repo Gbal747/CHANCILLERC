@@ -55,7 +55,8 @@ CARTAS_DEFINICION = {
     "Chanciller": {
         "cantidad": 2,
         "valor": 6,
-        "descripcion": "Roba dos cartas y elige una",
+        "descripcion": "Roba dos cartas y elige una"
+        # Si no se especifica imagen se usará la imagen default.
     },
     "Rey": {
         "cantidad": 1,
