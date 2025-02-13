@@ -96,17 +96,29 @@ class GameScreen(Screen):
 
         # Layout principal
         self.layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
+        
+        # Información del juego
         self.info_label = Label(text="Información del juego", size_hint=(1, 0.1), font_size='24sp', color=(0.2,0.1,0,1))
         self.layout.add_widget(self.info_label)
-        # Layout para mostrar la mano
+        
+        # Mazo de Descartes (se mostrará la última carta jugada)
+        self.discard_pile = DiscardPile()
+        self.layout.add_widget(self.discard_pile)
+        
+        # Layout para mostrar la mano del jugador
         self.hand_layout = BoxLayout(orientation='horizontal', size_hint=(1, 0.3), spacing=10)
         self.layout.add_widget(self.hand_layout)
+        
+        # Log del juego
         self.log_label = Label(text="Log del juego:", size_hint=(1, 0.5), font_size='18sp', color=(0.2,0.1,0,1))
         self.layout.add_widget(self.log_label)
-        self.next_button = Button(text="Siguiente Turno", size_hint=(1, 0.1),
+        
+        # Botón para avanzar el turn
+        self.next_button = Button(text="Siguiente Turn", size_hint=(1, 0.1),
                                   background_color=(0.6, 0.4, 0.2, 1), color=(1,1,1,1))
         self.next_button.bind(on_press=self.next_turn)
         self.layout.add_widget(self.next_button)
+        
         self.add_widget(self.layout)
 
         self.card_played = False  # Bandera para controlar si se jugó una carta
@@ -138,10 +150,13 @@ class GameScreen(Screen):
                 self.hand_layout.add_widget(card_widget)
 
     def next_turn(self, instance=None):
+        # Limpiar el log del juego al cambiar de turno  
+        self.log_label.text = "Log del juego:\n"
+
         # Si se presionó el botón y aún no se jugó una carta, se impide avanzar
         if instance is not None and self.partida and self.partida.current_player and not self.card_played:
             popup = Popup(title="Alerta",
-                          content=Label(text="Debes jugar una carta antes de pasar al siguiente turno.", color=(1,0,0,1)),
+                          content=Label(text="Debes jugar una carta antes de pasar al siguiente turno.", color=(1, 0, 0, 1)),
                           size_hint=(None, None), size=(400, 200))
             popup.open()
             return
@@ -166,6 +181,7 @@ class GameScreen(Screen):
                         self.play_card(carta)
                         return
 
+            # Actualizar la UI
             self.update_ui()
 
     def show_card_details(self, carta):
@@ -191,8 +207,19 @@ class GameScreen(Screen):
         if self.partida and carta in self.partida.current_player.mano:
             self.card_played = True
             self.partida.current_player.mano.remove(carta)
+            # Actualizamos el mazo de descartes para mostrar la carta jugada
+            self.discard_pile.update_card(carta)
             self.log(f"{self.partida.current_player.nombre} juega: {carta}")
-            self.apply_effect(carta, self.partida.current_player)
+
+            # Comprobar si la carta requiere interacción con otro jugador
+            if carta.nombre in ["Guardia", "Sacerdote", "Barón", "Príncipe", "Rey"]:
+                self.show_interaction_popup(carta)  # Nueva función para mostrar el popup adecuado
+                return  # No pasamos al siguiente turno aún, esperamos la elección
+            else:
+                # Si no requiere interacción, se aplica el efecto directamente
+                self.apply_effect(carta, self.partida.current_player)
+
+            # Comprobamos si hay un ganador
             ganador = self.partida.determinar_ganador()
             if ganador:
                 popup = Popup(title="Juego Terminado",
@@ -201,15 +228,27 @@ class GameScreen(Screen):
                 popup.open()
                 self.log(f"¡El ganador es {ganador.nombre}!")
                 return
+
             # Animación de desaparición de la carta jugada
             for child in self.hand_layout.children:
                 if hasattr(child, 'carta') and child.carta == carta:
                     anim = Animation(opacity=0, duration=0.3)
                     anim.start(child)
                     break
-            self.next_turn()
-        else:
-            self.log("Carta no encontrada en la mano.")
+
+
+    def show_interaction_popup(self, carta):
+        if carta.nombre == "Guardia":
+            self.show_guardia_popup(self.partida.current_player, carta)
+        elif carta.nombre == "Sacerdote":
+            self.show_sacerdote_popup(self.partida.current_player, carta)
+        elif carta.nombre == "Barón":
+            self.show_baron_popup(self.partida.current_player, carta)
+        elif carta.nombre == "Príncipe":
+            self.show_principe_popup(self.partida.current_player, carta)
+        elif carta.nombre == "Rey":
+            self.show_rey_popup(self.partida.current_player, carta)
+
 
     def apply_effect(self, carta, jugador_actual):
         # Se delega la ejecución del efecto de la carta según su nombre.
@@ -404,3 +443,23 @@ class GameScreen(Screen):
         else:
             self.log("Intercambio no posible.")
         popup.dismiss()
+    
+# -----------------------------
+# Widget para el mazo de descartes
+# -----------------------------
+class DiscardPile(BoxLayout):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.size_hint = (None, None)
+        self.size = (200, 300)  # Ajusta el tamaño según convenga
+        self.orientation = 'vertical'
+        self.padding = 5
+        self.spacing = 5
+        # Imagen por defecto (puede ser la parte de atrás o una imagen vacía)
+        self.image = Image(source='images/card_back.png', size_hint=(1, 1))
+        self.add_widget(self.image)
+
+    def update_card(self, carta):
+        """Actualiza la imagen para mostrar la carta jugada."""
+        self.image.source = carta.image_source
+        self.image.reload()  # Forzar recarga de la imagen si es necesario
