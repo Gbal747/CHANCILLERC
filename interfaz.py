@@ -23,9 +23,9 @@ class CardWidget(ButtonBehavior, BoxLayout):
         self.carta = carta
         self.orientation = 'vertical'
         self.size_hint = (None, 1)
-        self.width = 200
-        self.padding = 5
-        self.spacing = 5
+        self.width = 400
+        self.padding = 10
+        self.spacing = 10
         with self.canvas.before:
             Color(rgba=(0.8, 0.7, 0.6, 1))  # Fondo (tono madera)
             self.rect = Rectangle(pos=self.pos, size=self.size)
@@ -184,6 +184,28 @@ class GameScreen(Screen):
             # Actualizar la UI
             self.update_ui()
 
+    def elegir_jugador(self, carta):
+        # Deshabilitar el botón "Siguiente Turn" para que no se avance manualmente
+        self.next_button.disabled = True
+
+        # Dependiendo del nombre de la carta, invocar el popup correspondiente.
+        if carta.nombre == "Guardia":
+            self.show_guardia_popup(self.partida.current_player, carta)
+        elif carta.nombre == "Sacerdote":
+            self.show_sacerdote_popup(self.partida.current_player, carta)
+        elif carta.nombre == "Barón":
+            self.show_baron_popup(self.partida.current_player, carta)
+        elif carta.nombre == "Príncipe":
+            self.show_principe_popup(self.partida.current_player, carta)
+        elif carta.nombre == "Rey":
+            self.show_rey_popup(self.partida.current_player, carta)
+        else:
+            self.apply_effect(carta, self.partida.current_player)
+            self.next_button.disabled = False
+            self.next_turn()
+        # No se llama a next_turn() aquí para esperar a que se complete la interacción.
+
+
     def show_card_details(self, carta):
         layout = BoxLayout(orientation='vertical', spacing=10, padding=10)
         card_image = Image(source=carta.image_source, size_hint=(1, 0.6))
@@ -206,35 +228,43 @@ class GameScreen(Screen):
     def play_card(self, carta):
         if self.partida and carta in self.partida.current_player.mano:
             self.card_played = True
-            self.partida.current_player.mano.remove(carta)
-            # Actualizamos el mazo de descartes para mostrar la carta jugada
-            self.discard_pile.update_card(carta)
-            self.log(f"{self.partida.current_player.nombre} juega: {carta}")
+        self.partida.current_player.mano.remove(carta)
+        # Actualizamos el mazo de descartes para mostrar la carta jugada
+        self.discard_pile.update_card(carta)
+        self.log(f"{self.partida.current_player.nombre} juega: {carta}")
 
-            # Comprobar si la carta requiere interacción con otro jugador
-            if carta.nombre in ["Guardia", "Sacerdote", "Barón", "Príncipe", "Rey"]:
-                self.show_interaction_popup(carta)  # Nueva función para mostrar el popup adecuado
-                return  # No pasamos al siguiente turno aún, esperamos la elección
-            else:
-                # Si no requiere interacción, se aplica el efecto directamente
-                self.apply_effect(carta, self.partida.current_player)
+        # Si la carta requiere interacción (por ejemplo, elegir objetivo), delegamos esa acción
+        if carta.nombre in ["Guardia", "Sacerdote", "Barón", "Príncipe", "Rey"]:
+            # Aquí se debe invocar el método que maneja la elección de objetivo.
+            # Es importante que, al finalizar la interacción (en la función de callback),
+            # se llame a `self.next_turn()` para pasar al siguiente turno.
+            self.elegir_jugador(carta)
+            return  # Salir para esperar que se complete la interacción
+        else:
+            # Si la carta no requiere interacción, se aplica el efecto directamente
+            self.apply_effect(carta, self.partida.current_player)
 
-            # Comprobamos si hay un ganador
-            ganador = self.partida.determinar_ganador()
-            if ganador:
-                popup = Popup(title="Juego Terminado",
-                              content=Label(text=f"¡El ganador es {ganador.nombre} con {ganador.mostrar_mano()}!", color=(0,0,0,1)),
-                              size_hint=(None, None), size=(400, 300))
-                popup.open()
-                self.log(f"¡El ganador es {ganador.nombre}!")
-                return
+        # Comprobamos si hay un ganador
+        ganador = self.partida.determinar_ganador()
+        if ganador:
+            popup = Popup(title="Juego Terminado",
+                          content=Label(text=f"¡El ganador es {ganador.nombre} con {ganador.mostrar_mano()}!", color=(0, 0, 0, 1)),
+                          size_hint=(None, None), size=(400, 300))
+            popup.open()
+            self.log(f"¡El ganador es {ganador.nombre}!")
+            return
 
-            # Animación de desaparición de la carta jugada
-            for child in self.hand_layout.children:
-                if hasattr(child, 'carta') and child.carta == carta:
-                    anim = Animation(opacity=0, duration=0.3)
-                    anim.start(child)
-                    break
+        # Animación de desaparición de la carta jugada
+        for child in self.hand_layout.children:
+            if hasattr(child, 'carta') and child.carta == carta:
+                anim = Animation(opacity=0, duration=0.3)
+                anim.start(child)
+                break
+
+        # Aquí se pasa automáticamente al siguiente turno
+        self.next_turn()
+        self.log("Carta no encontrada en la mano.")
+
 
 
     def show_interaction_popup(self, carta):
@@ -285,6 +315,8 @@ class GameScreen(Screen):
         targets = [j for j in self.partida.jugadores if j != jugador_actual and not j.eliminado and not j.protegido]
         if not targets:
             self.log("No hay objetivos disponibles para el Guardia.")
+            self.next_button.disabled = False
+            self.next_turn()
             return
         content = BoxLayout(orientation='vertical', spacing=10, padding=10)
         content.add_widget(Label(text="Selecciona un jugador objetivo:", color=(0.2,0.1,0,1)))
@@ -303,6 +335,7 @@ class GameScreen(Screen):
                              background_color=(0.6, 0.4, 0.2, 1), color=(1,1,1,1))
         popup = Popup(title="Efecto Guardia", content=content,
                       size_hint=(None, None), size=(400, 400))
+        
         def on_confirm(instance):
             if selected_target["target"] is None:
                 self.log("Debes seleccionar un objetivo.")
@@ -318,6 +351,9 @@ class GameScreen(Screen):
                 else:
                     self.log("Adivinaste mal. No ocurre nada.")
                 popup.dismiss()
+                # Reactivar el botón y avanzar de turno
+                self.next_button.disabled = False
+                self.next_turn()
         confirm_btn.bind(on_press=on_confirm)
         content.add_widget(confirm_btn)
         popup.open()
@@ -346,6 +382,8 @@ class GameScreen(Screen):
     def sacerdote_selected(self, target, popup):
         self.log(f"La mano de {target.nombre} es: {target.mostrar_mano()}")
         popup.dismiss()
+        self.next_button.disabled = False
+        self.next_turn()
 
     def show_baron_popup(self, jugador_actual, carta):
         targets = [j for j in self.partida.jugadores if j != jugador_actual and not j.eliminado and not j.protegido]
@@ -384,6 +422,8 @@ class GameScreen(Screen):
         else:
             self.log(f"{target.nombre} no tiene cartas para comparar.")
         popup.dismiss()
+        self.next_button.disabled = False
+        self.next_turn()
 
     def show_principe_popup(self, jugador_actual, carta):
         targets = [j for j in self.partida.jugadores if not j.eliminado]
@@ -417,6 +457,8 @@ class GameScreen(Screen):
                 else:
                     self.log("La baraja está vacía. No se puede robar una nueva carta.")
         popup.dismiss()
+        self.next_button.disabled = False
+        self.next_turn()
 
     def show_rey_popup(self, jugador_actual, carta):
         targets = [j for j in self.partida.jugadores if j != jugador_actual and not j.eliminado and not j.protegido]
@@ -443,6 +485,8 @@ class GameScreen(Screen):
         else:
             self.log("Intercambio no posible.")
         popup.dismiss()
+        self.next_button.disabled = False
+        self.next_turn()
     
 # -----------------------------
 # Widget para el mazo de descartes
