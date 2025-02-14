@@ -92,36 +92,64 @@ class GameScreen(Screen):
             self.rect = Rectangle(size=Window.size, pos=self.pos)
         self.bind(size=self._update_rect, pos=self._update_rect)
         
-        self.partida = None  # Instancia de la partida (lógica de juego)
+        self.partida = None
 
-        # Layout principal
+        # Layout principal (vertical)
         self.layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
-        
-        # Información del juego
-        self.info_label = Label(text="Información del juego", size_hint=(1, 0.1), font_size='24sp', color=(0.2,0.1,0,1))
-        self.layout.add_widget(self.info_label)
-        
-        # Mazo de Descartes (se mostrará la última carta jugada)
-        self.discard_pile = DiscardPile()
-        self.layout.add_widget(self.discard_pile)
-        
-        # Layout para mostrar la mano del jugador
+
+        # Contenedor superior (Texto del turno)
+        turno_layout = BoxLayout(orientation='vertical', size_hint_y=None, height=50)  # Fijamos la altura
+        self.info_label = Label(
+            text="Turno de: Jugador 1",
+            font_size='24sp',
+            color=(0.2, 0.1, 0, 1),
+            size_hint_y=None,  # Fijamos la altura para que no se sobreponga
+            height=40
+        )
+        turno_layout.add_widget(self.info_label)
+        self.layout.add_widget(turno_layout)
+
+        # Contenedor para los mazos (Deck y DiscardPile)
+        mazo_layout = BoxLayout(
+            orientation='horizontal', 
+            size_hint=(None, None), 
+            width=430,  # Ajustado para que el centro quede bien
+            height=280,  
+            spacing=50  # Espacio entre los mazos
+        )
+        mazo_layout.pos_hint = {'center_x': 0.5}  # Centramos el contenedor de mazos
+
+        # Mazo de robo
+        self.deck_widget = DeckWidget(callback=self.show_remaining_deck, size_hint=(None, None), size=(120, 150))
+        mazo_layout.add_widget(self.deck_widget)
+
+        # Mazo de descartes
+        self.discard_pile = DiscardPile(size_hint=(None, None), size=(120, 150))
+        mazo_layout.add_widget(self.discard_pile)
+
+        # Agregar el layout de mazos al layout principal
+        self.layout.add_widget(mazo_layout)
+
+        # Layout de la mano del jugador
         self.hand_layout = BoxLayout(orientation='horizontal', size_hint=(1, 0.3), spacing=10)
         self.layout.add_widget(self.hand_layout)
-        
+
         # Log del juego
-        self.log_label = Label(text="Log del juego:", size_hint=(1, 0.5), font_size='18sp', color=(0.2,0.1,0,1))
+        self.log_label = Label(text="Log del juego:", size_hint=(1, 0.4), font_size='18sp', color=(0.2, 0.1, 0, 1))
         self.layout.add_widget(self.log_label)
-        
-        # Botón para avanzar el turn
-        self.next_button = Button(text="Siguiente Turn", size_hint=(1, 0.1),
-                                  background_color=(0.6, 0.4, 0.2, 1), color=(1,1,1,1))
+
+
+        # Botón de siguiente turno
+        self.next_button = Button(
+            text="Siguiente Turno",
+            size_hint=(1, 0.1),
+            background_color=(0.6, 0.4, 0.2, 1),
+            color=(1, 1, 1, 1)
+        )
         self.next_button.bind(on_press=self.next_turn)
         self.layout.add_widget(self.next_button)
-        
-        self.add_widget(self.layout)
 
-        self.card_played = False  # Bandera para controlar si se jugó una carta
+        self.add_widget(self.layout)
 
     def _update_rect(self, *args):
         self.rect.size = self.size
@@ -133,6 +161,18 @@ class GameScreen(Screen):
         self.partida.repartir_inicial()
         self.log_label.text = "Juego iniciado.\n"
         self.next_turn()
+
+    def show_remaining_deck(self):
+        if self.partida and self.partida.deck:
+            count = len(self.partida.deck)
+            content = BoxLayout(orientation='vertical', spacing=10, padding=10)
+            content.add_widget(Label(text=f"Cartas restantes en el mazo: {count}", font_size="20sp"))
+            popup = Popup(title="Mazo", content=content, size_hint=(None, None), size=(400, 200))
+            popup.open()
+        else:
+            popup = Popup(title="Mazo", content=Label(text="El mazo está vacío."), size_hint=(None, None), size=(300, 200))
+            popup.open()
+
 
     def log(self, message):
         self.log_label.text += message + "\n"
@@ -202,8 +242,7 @@ class GameScreen(Screen):
         else:
             self.apply_effect(carta, self.partida.current_player)
             self.next_button.disabled = False
-            self.next_turn()
-        # No se llama a next_turn() aquí para esperar a que se complete la interacción.
+        
 
 
     def show_card_details(self, carta):
@@ -260,11 +299,6 @@ class GameScreen(Screen):
                 anim = Animation(opacity=0, duration=0.3)
                 anim.start(child)
                 break
-
-        # Aquí se pasa automáticamente al siguiente turno
-        self.next_turn()
-        self.log("Carta no encontrada en la mano.")
-
 
 
     def show_interaction_popup(self, carta):
@@ -507,3 +541,22 @@ class DiscardPile(BoxLayout):
         """Actualiza la imagen para mostrar la carta jugada."""
         self.image.source = carta.image_source
         self.image.reload()  # Forzar recarga de la imagen si es necesario
+
+
+# Mazo que se baraja y del que se reparten las cartas
+class DeckWidget(ButtonBehavior, BoxLayout):
+    def __init__(self, callback=None, **kwargs):
+        super().__init__(**kwargs)
+        self.callback = callback  # Función que se llamará al tocar el widget
+        self.orientation = 'vertical'
+        self.size_hint = (None, None)
+        self.size = (200, 300)  # Ajusta el tamaño según convenga
+        self.padding = 5
+        self.spacing = 5
+        # Imagen por defecto para representar el mazo (la parte trasera de las cartas)
+        self.image = Image(source='images/deck_back.png', size_hint=(1, 1))
+        self.add_widget(self.image)
+
+    def on_press(self):
+        if self.callback:
+            self.callback()
