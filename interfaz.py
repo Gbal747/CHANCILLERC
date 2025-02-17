@@ -12,8 +12,7 @@ from kivy.core.window import Window
 
 from jugadores import Jugador
 from partida import Partida
-from kivy.app import App
-from kivy.uix.screenmanager import ScreenManager
+
 
 # Nueva pantalla para el efecto del Guardia
 class GuardiaScreen(Screen):
