@@ -2,6 +2,7 @@
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager
 from interfaz import SetupScreen, GameScreen
+from interfaz import GuardiaScreen
 
 class CardGameApp(App):
     def build(self):
@@ -12,6 +13,7 @@ class CardGameApp(App):
         sm = ScreenManager()
         sm.add_widget(SetupScreen(name='setup'))
         sm.add_widget(GameScreen(name='game'))
+        sm.add_widget(GuardiaScreen(name='guardia'))
         return sm
 
 if __name__ == '__main__':
