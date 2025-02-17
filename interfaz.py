@@ -212,24 +212,65 @@ class GameScreen(Screen):
             Color(rgba=(0.95, 0.9, 0.8, 1))
             self.rect = Rectangle(size=Window.size, pos=self.pos)
         self.bind(size=self._update_rect, pos=self._update_rect)
+        
         self.partida = None
+
+        # Layout principal (vertical)
         self.layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
-        self.info_label = Label(text="Información del juego", size_hint=(1, 0.1),
-                                font_size='24sp', color=(0.2,0.1,0,1))
-        self.layout.add_widget(self.info_label)
-        self.discard_pile = DiscardPile()
-        self.layout.add_widget(self.discard_pile)
+
+        # Contenedor superior (Texto del turno)
+        turno_layout = BoxLayout(orientation='vertical', size_hint_y=None, height=50)  # Fijamos la altura
+        self.info_label = Label(
+            text="Turno de: Jugador 1",
+            font_size='24sp',
+            color=(0.2, 0.1, 0, 1),
+            size_hint_y=None,  # Fijamos la altura para que no se sobreponga
+            height=40
+        )
+        turno_layout.add_widget(self.info_label)
+        self.layout.add_widget(turno_layout)
+
+        # Contenedor para los mazos (Deck y DiscardPile)
+        mazo_layout = BoxLayout(
+            orientation='horizontal', 
+            size_hint=(None, None), 
+            width=430,  # Ajustado para que el centro quede bien
+            height=280,  
+            spacing=50  # Espacio entre los mazos
+        )
+        mazo_layout.pos_hint = {'center_x': 0.5}  # Centramos el contenedor de mazos
+
+        # Mazo de robo
+        self.deck_widget = DeckWidget(callback=self.show_remaining_deck, size_hint=(None, None), size=(120, 150))
+        mazo_layout.add_widget(self.deck_widget)
+
+        # Mazo de descartes
+        self.discard_pile = DiscardPile(size_hint=(None, None), size=(120, 150))
+        mazo_layout.add_widget(self.discard_pile)
+
+        # Agregar el layout de mazos al layout principal
+        self.layout.add_widget(mazo_layout)
+
+        # Layout de la mano del jugador
         self.hand_layout = BoxLayout(orientation='horizontal', size_hint=(1, 0.3), spacing=10)
         self.layout.add_widget(self.hand_layout)
-        self.log_label = Label(text="Log del juego:", size_hint=(1, 0.5),
-                                font_size='18sp', color=(0.2,0.1,0,1))
+
+        # Log del juego
+        self.log_label = Label(text="Log del juego:", size_hint=(1, 0.4), font_size='18sp', color=(0.2, 0.1, 0, 1))
         self.layout.add_widget(self.log_label)
-        self.next_button = Button(text="Siguiente Turn", size_hint=(1, 0.1),
-                                  background_color=(0.6, 0.4, 0.2, 1), color=(1,1,1,1))
+
+
+        # Botón de siguiente turno
+        self.next_button = Button(
+            text="Siguiente Turno",
+            size_hint=(1, 0.1),
+            background_color=(0.6, 0.4, 0.2, 1),
+            color=(1, 1, 1, 1)
+        )
         self.next_button.bind(on_press=self.next_turn)
         self.layout.add_widget(self.next_button)
+
         self.add_widget(self.layout)
-        self.card_played = False
 
     def _update_rect(self, *args):
         self.rect.size = self.size
@@ -244,6 +285,17 @@ class GameScreen(Screen):
     def log(self, message):
         self.log_label.text += message + "\n"
 
+    def show_remaining_deck(self):
+        if self.partida and self.partida.deck:
+            count = len(self.partida.deck)
+            content = BoxLayout(orientation='vertical', spacing=10, padding=10)
+            content.add_widget(Label(text=f"Cartas restantes en el mazo: {count}", font_size="20sp"))
+            popup = Popup(title="Mazo", content=content, size_hint=(None, None), size=(400, 200))
+            popup.open()
+        else:
+            popup = Popup(title="Mazo", content=Label(text="El mazo está vacío."), size_hint=(None, None), size=(300, 200))
+            popup.open()
+
     def update_ui(self):
         self.hand_layout.clear_widgets()
         if self.partida and self.partida.current_player and not self.partida.current_player.eliminado:
@@ -257,24 +309,29 @@ class GameScreen(Screen):
                 self.hand_layout.add_widget(card_widget)
 
     def next_turn(self, instance=None):
+        # Limpiar el log del juego al cambiar de turno  
         self.log_label.text = "Log del juego:\n"
+
+        # Si se presionó el botón y aún no se jugó una carta, se impide avanzar
         if instance is not None and self.partida and self.partida.current_player and not self.card_played:
             popup = Popup(title="Alerta",
-                          content=Label(text="Debes jugar una carta antes de pasar al siguiente turno.",
-                                        color=(1, 0, 0, 1)),
+                          content=Label(text="Debes jugar una carta antes de pasar al siguiente turno.", color=(1, 0, 0, 1)),
                           size_hint=(None, None), size=(400, 200))
             popup.open()
             return
+
         if self.partida:
             jugador = self.partida.siguiente_jugador()
             self.card_played = False
+            # Se elimina la protección al inicio del turno
             jugador.protegido = False
-            if not jugador.eliminado:
-                carta_roba = self.partida.robar_carta(jugador)
-                if carta_roba:
-                    self.log(f"{jugador.nombre} roba: {carta_roba}")
-                else:
-                    self.log("La baraja se ha agotado.")
+            carta_roba = self.partida.robar_carta(jugador)
+            if carta_roba:
+                self.log(f"{jugador.nombre} roba: {carta_roba}")
+            else:
+                self.log("La baraja se ha agotado.")
+
+            # Regla de la Condesa: si en la mano hay Condesa junto a Rey o Príncipe, se debe jugar la Condesa
             if any(carta.nombre == "Condesa" for carta in jugador.mano) and \
                any(carta.nombre in ["Rey", "Príncipe"] for carta in jugador.mano):
                 for carta in jugador.mano:
@@ -282,6 +339,8 @@ class GameScreen(Screen):
                         self.log(f"{jugador.nombre} debe jugar la Condesa obligatoriamente.")
                         self.play_card(carta)
                         return
+
+            # Actualizar la UI
             self.update_ui()
 
     def elegir_jugador(self, carta):
@@ -320,33 +379,41 @@ class GameScreen(Screen):
         popup.dismiss()
         self.play_card(carta)
 
+    
     def play_card(self, carta):
         if self.partida and carta in self.partida.current_player.mano:
             self.card_played = True
-        self.partida.current_player.mano.remove(carta)
-        self.discard_pile.update_card(carta)
-        self.log(f"{self.partida.current_player.nombre} juega: {carta}")
-        if carta.nombre in ["Guardia", "Sacerdote", "Barón", "Príncipe", "Rey"]:
-            self.elegir_jugador(carta)
-            return
+            self.partida.current_player.mano.remove(carta)
+            self.discard_pile.update_card(carta)
+            self.log(f"{self.partida.current_player.nombre} juega: {carta}")
+
+            if carta.nombre in ["Guardia", "Sacerdote", "Barón", "Príncipe", "Rey"]:
+                self.elegir_jugador(carta)
+                return  # Se espera la interacción del usuario
+            else:
+                self.apply_effect(carta, self.partida.current_player)
+
+            ganador = self.partida.determinar_ganador()
+            if ganador:
+                popup = Popup(title="Juego Terminado",
+                              content=Label(text=f"¡El ganador es {ganador.nombre} con {ganador.mostrar_mano()}!", color=(0, 0, 0, 1)),
+                              size_hint=(None, None), size=(400, 300))
+                popup.open()
+                self.log(f"¡El ganador es {ganador.nombre}!")
+                return
+
+            # Animación para quitar la carta jugada de la mano
+            for child in self.hand_layout.children:
+                if hasattr(child, 'carta') and child.carta == carta:
+                    anim = Animation(opacity=0, duration=0.3)
+                    anim.start(child)
+                    break
+
+            # Se elimina la llamada a next_turn()
+            # El usuario deberá presionar el botón "Siguiente Turno"
+            self.next_button.disabled = False
         else:
-            self.apply_effect(carta, self.partida.current_player)
-        ganador = self.partida.determinar_ganador()
-        if ganador:
-            popup = Popup(title="Juego Terminado",
-                          content=Label(text=f"¡El ganador es {ganador.nombre} con {ganador.mostrar_mano()}!",
-                                        color=(0, 0, 0, 1)),
-                          size_hint=(None, None), size=(400, 300))
-            popup.open()
-            self.log(f"¡El ganador es {ganador.nombre}!")
-            return
-        for child in self.hand_layout.children:
-            if hasattr(child, 'carta') and child.carta == carta:
-                anim = Animation(opacity=0, duration=0.3)
-                anim.start(child)
-                break
-        self.next_turn()
-        self.log("Carta no encontrada en la mano.")
+            self.log("Carta no encontrada en la mano.")
 
     def show_interaction_popup(self, carta):
         if carta.nombre == "Guardia":
@@ -387,6 +454,55 @@ class GameScreen(Screen):
         else:
             self.log(f"{carta.nombre} no tiene efecto implementado.")
 
+    def show_guardia_popup(self, jugador_actual, carta):
+        targets = [j for j in self.partida.jugadores if j != jugador_actual and not j.eliminado and not j.protegido]
+        if not targets:
+            self.log("No hay objetivos disponibles para el Guardia.")
+            self.next_button.disabled = False
+            self.next_turn()
+            return
+        content = BoxLayout(orientation='vertical', spacing=10, padding=10)
+        content.add_widget(Label(text="Selecciona un jugador objetivo:", color=(0.2,0.1,0,1)))
+        target_buttons = BoxLayout(orientation='vertical', spacing=5)
+        selected_target = {"target": None}
+        for target in targets:
+            btn = Button(text=target.nombre, size_hint_y=None, height=40,
+                         background_color=(0.6, 0.4, 0.2, 1), color=(1,1,1,1))
+            btn.bind(on_press=lambda inst, t=target: self.select_guardia_target(selected_target, t))
+            target_buttons.add_widget(btn)
+        content.add_widget(target_buttons)
+        content.add_widget(Label(text="¿Qué carta crees que tiene?", color=(0.2,0.1,0,1)))
+        guess_input = TextInput(text='', multiline=False)
+        content.add_widget(guess_input)
+        confirm_btn = Button(text="Confirmar", size_hint_y=None, height=40,
+                             background_color=(0.6, 0.4, 0.2, 1), color=(1,1,1,1))
+        popup = Popup(title="Efecto Guardia", content=content,
+                      size_hint=(None, None), size=(400, 400))
+        
+        def on_confirm(instance):
+            if selected_target["target"] is None:
+                self.log("Debes seleccionar un objetivo.")
+            else:
+                guess = guess_input.text.strip().lower()
+                target = selected_target["target"]
+                if any(c.nombre.lower() == guess for c in target.mano):
+                    if any(c.nombre.lower() == "guardia" for c in target.mano):
+                        self.log(f"{target.nombre} tiene un Guardia, no puede ser eliminado.")
+                    else:
+                        self.log(f"¡Correcto! {target.nombre} tenía {guess} y queda eliminado.")
+                        target.eliminado = True
+                else:
+                    self.log("Adivinaste mal. No ocurre nada.")
+                popup.dismiss()
+                self.next_button.disabled = False
+
+        confirm_btn.bind(on_press=on_confirm)
+        content.add_widget(confirm_btn)
+        popup.open()
+
+    def select_guardia_target(self, selected_target, target):
+        selected_target["target"] = target
+
     def show_guardia_screen(self, jugador_actual, carta):
         guardia_screen = self.manager.get_screen('guardia')
         guardia_screen.set_context(jugador_actual, carta, self)
@@ -414,7 +530,6 @@ class GameScreen(Screen):
         self.log(f"La mano de {target.nombre} es: {target.mostrar_mano()}")
         popup.dismiss()
         self.next_button.disabled = False
-        self.next_turn()
 
     def show_baron_popup(self, jugador_actual, carta):
         targets = [j for j in self.partida.jugadores if j != jugador_actual and not j.eliminado and not j.protegido]
@@ -456,7 +571,6 @@ class GameScreen(Screen):
             self.log(f"{target.nombre} no tiene cartas para comparar.")
         popup.dismiss()
         self.next_button.disabled = False
-        self.next_turn()
 
     def show_principe_popup(self, jugador_actual, carta):
         targets = [j for j in self.partida.jugadores if not j.eliminado]
@@ -492,7 +606,6 @@ class GameScreen(Screen):
                     self.log("La baraja está vacía. No se puede robar una nueva carta.")
         popup.dismiss()
         self.next_button.disabled = False
-        self.next_turn()
 
     def show_rey_popup(self, jugador_actual, carta):
         targets = [j for j in self.partida.jugadores if j != jugador_actual and not j.eliminado and not j.protegido]
@@ -520,7 +633,6 @@ class GameScreen(Screen):
             self.log("Intercambio no posible.")
         popup.dismiss()
         self.next_button.disabled = False
-        self.next_turn()
 
 # -----------------------------
 # Widget para el mazo de descartes
@@ -540,17 +652,20 @@ class DiscardPile(BoxLayout):
         self.image.source = carta.image_source
         self.image.reload()
 
-# -----------------------------
-# Clase principal de la aplicación
-# -----------------------------
-class CardGameApp(App):
-    def build(self):
-        self.title = "Juego de Cartas"
-        sm = ScreenManager()
-        sm.add_widget(SetupScreen(name='setup'))
-        sm.add_widget(GameScreen(name='game'))
-        sm.add_widget(GuardiaScreen(name='guardia'))
-        return sm
+# Mazo que se baraja y del que se reparten las cartas
+class DeckWidget(ButtonBehavior, BoxLayout):
+    def __init__(self, callback=None, **kwargs):
+        super().__init__(**kwargs)
+        self.callback = callback  # Función que se llamará al tocar el widget
+        self.orientation = 'vertical'
+        self.size_hint = (None, None)
+        self.size = (200, 300)  # Ajusta el tamaño según convenga
+        self.padding = 5
+        self.spacing = 5
+        # Imagen por defecto para representar el mazo (la parte trasera de las cartas)
+        self.image = Image(source='images/deck_back.png', size_hint=(1, 1))
+        self.add_widget(self.image)
 
-if __name__ == '__main__':
-    CardGameApp().run()
+    def on_press(self):
+        if self.callback:
+            self.callback()
