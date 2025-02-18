@@ -174,6 +174,281 @@ class GuardiaScreen(Screen):
         self.game_screen.next_button.disabled = False
         self.game_screen.manager.current = 'game'
 
+# Nueva pantalla para el efecto del Barón
+class BaronScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.jugador_actual = None
+        self.carta = None
+        self.game_screen = None
+        
+        # Layout principal
+        self.layout = BoxLayout(orientation='vertical', padding=[20, 30, 20, 10], spacing=10)
+        self.add_widget(self.layout)
+        
+        # Sección de selección de jugador
+        self.player_section = BoxLayout(orientation='vertical', spacing=5, size_hint=(1, 0.4))
+        self.instruction_label = Label(
+            text="Selecciona un jugador para comparar cartas:",
+            size_hint=(1, 0.4),
+            font_size='18sp',
+            color=(0.2, 0.1, 0, 1)
+        )
+        self.player_section.add_widget(self.instruction_label)
+        
+        # Layout para los botones de jugadores
+        self.target_buttons_layout = BoxLayout(
+            orientation='horizontal',
+            spacing=10,
+            size_hint=(0.7, 0.6),
+            pos_hint={'center_x': 0.5}
+        )
+        self.player_section.add_widget(self.target_buttons_layout)
+        self.layout.add_widget(self.player_section)
+        
+        # Botón de confirmar
+        button_layout = BoxLayout(
+            orientation='vertical',
+            size_hint=(1, 0.15),
+            padding=[0, 0, 0, 10]
+        )
+        self.confirm_btn = Button(
+            text="Confirmar",
+            size_hint=(0.3, 0.7),
+            pos_hint={'center_x': 0.5},
+            background_color=(0.6, 0.4, 0.2, 1),
+            color=(1, 1, 1, 1)
+        )
+        button_layout.add_widget(self.confirm_btn)
+        self.layout.add_widget(button_layout)
+        
+        self.selected_target = None
+
+    def set_context(self, jugador_actual, carta, game_screen):
+        self.jugador_actual = jugador_actual
+        self.carta = carta
+        self.game_screen = game_screen
+        self.selected_target = None
+        self.build_ui()
+
+    def build_ui(self):
+        self.target_buttons_layout.clear_widgets()
+        
+        # Construir botones para la selección de jugador objetivo
+        targets = [j for j in self.game_screen.partida.jugadores 
+                   if j != self.jugador_actual and not j.eliminado and not j.protegido]
+        
+        if not targets:
+            self.game_screen.log("No hay objetivos disponibles para el Barón.")
+            self.game_screen.complete_card_play(self.carta)
+            self.game_screen.next_button.disabled = False
+            self.game_screen.manager.current = 'game'
+            return
+            
+        # Botones de jugadores
+        button_width = 1.0 / len(targets) if targets else 1
+        for target in targets:
+            btn = Button(
+                text=target.nombre,
+                size_hint=(button_width, 0.7),
+                pos_hint={'center_y': 0.5},
+                background_color=(0.6, 0.4, 0.2, 1),
+                color=(1, 1, 1, 1)
+            )
+            btn.bind(on_press=lambda instance, t=target: self.select_target(instance, t))
+            self.target_buttons_layout.add_widget(btn)
+            
+        self.confirm_btn.bind(on_press=self.on_confirm)
+
+    def select_target(self, instance, target):
+        self.selected_target = target
+        for child in self.target_buttons_layout.children:
+            child.background_color = (0.6, 0.4, 0.2, 1)
+        instance.background_color = (0, 1, 0, 1)
+
+    def on_confirm(self, instance):
+        if self.selected_target is None:
+            self.game_screen.log("Debes seleccionar un objetivo.")
+            return
+            
+        target = self.selected_target
+        if target.mano:
+            carta_jugador = [c for c in self.jugador_actual.mano if c != self.carta][0]
+            carta_objetivo = target.mano[0]
+            self.game_screen.log(f"Comparando cartas: {self.jugador_actual.nombre}({carta_jugador.nombre}) vs {target.nombre}({carta_objetivo.nombre})")
+            
+            if carta_jugador.valor > carta_objetivo.valor:
+                self.game_screen.log(f"{target.nombre} es eliminado")
+                target.eliminado = True
+            elif carta_jugador.valor < carta_objetivo.valor:
+                self.game_screen.log(f"{self.jugador_actual.nombre} es eliminado")
+                self.jugador_actual.eliminado = True
+            else:
+                self.game_screen.log("Empate, nadie es eliminado")
+        
+        # Descartar la carta del Barón
+        self.game_screen.complete_card_play(self.carta)
+        self.game_screen.next_button.disabled = False
+        self.game_screen.manager.current = 'game'
+
+# Nueva pantalla para el efecto del Chanceller
+class ChancillerScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.jugador_actual = None
+        self.carta = None
+        self.game_screen = None
+        self.cartas_adicionales = []
+        self.carta_original = None
+        self.selected_card = None
+        self.return_order = []
+        
+        # Layout principal
+        self.layout = BoxLayout(orientation='vertical', padding=[20, 30, 20, 10], spacing=10)
+        self.add_widget(self.layout)
+        
+        # Instrucciones
+        self.instruction_label = Label(
+            text="Selecciona una carta para quedarte:",
+            size_hint=(1, 0.1),
+            font_size='18sp',
+            color=(0.2, 0.1, 0, 1)
+        )
+        self.layout.add_widget(self.instruction_label)
+        
+        # Layout para mostrar las cartas
+        self.cards_layout = BoxLayout(
+            orientation='horizontal',
+            spacing=10,
+            size_hint=(1, 0.5),
+            pos_hint={'center_x': 0.5}
+        )
+        self.layout.add_widget(self.cards_layout)
+        
+        # Layout para el orden de retorno
+        self.return_layout = BoxLayout(
+            orientation='vertical',
+            spacing=10,
+            size_hint=(1, 0.3)
+        )
+        self.return_instruction = Label(
+            text="Ordena las cartas restantes para devolverlas al mazo:",
+            size_hint=(1, 0.2),
+            font_size='18sp',
+            color=(0.2, 0.1, 0, 1),
+            opacity=0
+        )
+        self.return_layout.add_widget(self.return_instruction)
+        
+        self.return_cards_layout = BoxLayout(
+            orientation='horizontal',
+            spacing=10,
+            size_hint=(1, 0.8)
+        )
+        self.return_layout.add_widget(self.return_cards_layout)
+        self.layout.add_widget(self.return_layout)
+        
+        # Botón de confirmar
+        self.confirm_btn = Button(
+            text="Confirmar",
+            size_hint=(0.3, 0.1),
+            pos_hint={'center_x': 0.5},
+            background_color=(0.6, 0.4, 0.2, 1),
+            color=(1, 1, 1, 1)
+        )
+        self.layout.add_widget(self.confirm_btn)
+
+    def set_context(self, jugador_actual, carta, game_screen, cartas_adicionales, carta_original):
+        self.jugador_actual = jugador_actual
+        self.carta = carta  # Esta es la carta del Chanceller
+        self.game_screen = game_screen
+        self.cartas_adicionales = cartas_adicionales
+        self.carta_original = carta_original
+        self.selected_card = None
+        self.return_order = []
+        self.build_ui()
+
+    def build_ui(self):
+        self.cards_layout.clear_widgets()
+        self.return_cards_layout.clear_widgets()
+        self.return_instruction.opacity = 0
+        
+        # Mostrar todas las cartas disponibles (la original más las dos robadas)
+        todas_las_cartas = [self.carta_original] + self.cartas_adicionales
+        for i, carta in enumerate(todas_las_cartas):
+            card_btn = Button(
+                text=carta.nombre,
+                size_hint=(0.3, 0.8),
+                background_color=(0.6, 0.4, 0.2, 1),
+                color=(1, 1, 1, 1)
+            )
+            card_btn.bind(on_press=lambda instance, c=carta: self.select_card(instance, c))
+            self.cards_layout.add_widget(card_btn)
+            
+        self.confirm_btn.bind(on_press=self.on_confirm)
+        self.confirm_btn.disabled = True
+
+    def select_card(self, instance, carta):
+        # Si ya teníamos una carta seleccionada, restauramos su color
+        for child in self.cards_layout.children:
+            child.background_color = (0.6, 0.4, 0.2, 1)
+        
+        # Marcamos la nueva carta seleccionada
+        instance.background_color = (0, 1, 0, 1)
+        self.selected_card = carta
+        
+        # Preparamos el layout para ordenar las cartas restantes
+        self.return_cards_layout.clear_widgets()
+        self.return_order = []
+        
+        # Mostramos las cartas restantes para ordenarlas
+        cartas_restantes = [c for c in ([self.carta_original] + self.cartas_adicionales) if c != carta]
+        self.return_instruction.opacity = 1
+        
+        for carta_rest in cartas_restantes:
+            card_btn = Button(
+                text=carta_rest.nombre,
+                size_hint=(0.3, 0.8),
+                background_color=(0.6, 0.4, 0.2, 1),
+                color=(1, 1, 1, 1)
+            )
+            card_btn.bind(on_press=lambda instance, c=carta_rest: self.add_to_return_order(instance, c))
+            self.return_cards_layout.add_widget(card_btn)
+        
+        self.confirm_btn.disabled = True
+
+    def add_to_return_order(self, instance, carta):
+        if carta in self.return_order:
+            # Si la carta ya estaba en el orden, la quitamos
+            self.return_order.remove(carta)
+            instance.background_color = (0.6, 0.4, 0.2, 1)
+        else:
+            # Si no estaba, la añadimos
+            self.return_order.append(carta)
+            instance.background_color = (0, 0.7, 0, 1)
+            # Añadimos un número para indicar el orden
+            instance.text = f"{carta.nombre} ({len(self.return_order)})"
+        
+        # Habilitamos el botón de confirmar solo si todas las cartas están ordenadas
+        self.confirm_btn.disabled = len(self.return_order) != 2
+
+    def on_confirm(self, instance):
+        if self.selected_card and len(self.return_order) == 2:
+            # Actualizamos la mano del jugador
+            self.jugador_actual.mano = [self.selected_card]
+            
+            # Añadimos las cartas al final del mazo en el orden seleccionado
+            for carta in self.return_order:
+                self.game_screen.partida.deck.append(carta)  # Cambiado de mazo a deck
+            
+            # Registramos la acción en el log
+            self.game_screen.log(f"{self.jugador_actual.nombre} se queda con una carta y devuelve dos al mazo")
+            
+            # Completamos el efecto
+            self.game_screen.complete_card_play(self.carta)
+            self.game_screen.next_button.disabled = False
+            self.game_screen.manager.current = 'game'
+
 # -----------------------------
 # Widget para representar una carta
 # -----------------------------
@@ -277,6 +552,7 @@ class GameScreen(Screen):
         self.bind(size=self._update_rect, pos=self._update_rect)
         
         self.partida = None
+        self.card_played = False  # Variable para controlar si se ha jugado una carta
         self.is_processing_effect = False  # Variable para controlar el estado de procesamiento
 
         # Layout principal (vertical)
@@ -386,7 +662,6 @@ class GameScreen(Screen):
 
         if self.partida:
             jugador = self.partida.siguiente_jugador()
-            self.card_played = False
             # Se elimina la protección al inicio del turno
             jugador.protegido = False
             carta_roba = self.partida.robar_carta(jugador)
@@ -407,36 +682,726 @@ class GameScreen(Screen):
             # Actualizar la UI
             self.update_ui()
 
+        # Reiniciar el estado de la carta jugada para el siguiente turno
+        self.card_played = False
+
     def elegir_jugador(self, carta):
+        """
+        Maneja la selección de un objetivo para el efecto de una carta
+        """
         self.next_button.disabled = True
         if carta.nombre == "Guardia":
             self.show_guardia_screen(self.partida.current_player, carta)
         elif carta.nombre == "Sacerdote":
-            self.show_sacerdote_popup(self.partida.current_player, carta)
+            # Obtener jugadores válidos como objetivo
+            targets = [j for j in self.partida.jugadores if j != self.partida.current_player and not j.eliminado and not j.protegido]
+            
+            if not targets:
+                self.log("No hay objetivos válidos para el Sacerdote")
+                self.card_played = True
+                self.next_button.disabled = False
+                self.complete_card_play(carta)
+                return
+                
+            content = BoxLayout(orientation='vertical', spacing=10, padding=10)
+            content.add_widget(Label(text="Selecciona un jugador para ver su carta:", font_size='18sp'))
+            
+            # Layout para los botones
+            buttons_layout = GridLayout(cols=2, spacing=10, padding=10)
+
+            # Crear el popup antes de los botones para poder referenciarlo
+            selection_popup = Popup(
+                title='Efecto del Sacerdote',
+                content=content,
+                size_hint=(0.8, 0.8),
+                auto_dismiss=False
+            )
+            
+            for target in targets:
+                btn = Button(
+                    text=target.nombre,
+                    size_hint_y=None,
+                    height=40,
+                    background_color=(0.6, 0.4, 0.2, 1),
+                    color=(1,1,1,1)
+                )
+                def create_callback(t=target, p=selection_popup):
+                    def on_press(instance):
+                        p.dismiss()  # Cerrar el popup usando la referencia correcta
+                        # Mostrar la carta del objetivo
+                        self.show_target_card(self.partida.current_player, t, carta)
+                    return on_press
+                btn.bind(on_press=create_callback())
+                buttons_layout.add_widget(btn)
+            
+            content.add_widget(buttons_layout)
+            selection_popup.open()
         elif carta.nombre == "Barón":
-            self.show_baron_popup(self.partida.current_player, carta)
+            # Mostrar popup para seleccionar objetivo para el Barón
+            targets = [j for j in self.partida.jugadores if j != self.partida.current_player and not j.eliminado and not j.protegido]
+            if not targets:
+                self.log("No hay objetivos válidos para el Barón")
+                self.card_played = True
+                self.next_button.disabled = False
+                self.complete_card_play(carta)
+                return
+            
+            content = BoxLayout(orientation='vertical', spacing=10, padding=10)
+            content.add_widget(Label(text="Selecciona un jugador para comparar cartas:", font_size='18sp'))
+            
+            # Layout para los botones
+            buttons_layout = GridLayout(cols=2, spacing=10, padding=10)
+
+            # Crear el popup antes de los botones para poder referenciarlo
+            baron_popup = Popup(
+                title='Efecto del Barón',
+                content=content,
+                size_hint=(0.8, 0.8),
+                auto_dismiss=False
+            )
+            
+            for target in targets:
+                btn = Button(
+                    text=target.nombre,
+                    size_hint_y=None,
+                    height=40,
+                    background_color=(0.6, 0.4, 0.2, 1),
+                    color=(1,1,1,1)
+                )
+                def create_callback(t=target, p=baron_popup):
+                    def on_press(instance):
+                        p.dismiss()  # Cerrar el popup usando la referencia correcta
+                        self.compare_hands(self.partida.current_player, t, carta)
+                    return on_press
+                btn.bind(on_press=create_callback())
+                buttons_layout.add_widget(btn)
+            
+            content.add_widget(buttons_layout)
+            baron_popup.open()
         elif carta.nombre == "Príncipe":
             self.show_principe_popup(self.partida.current_player, carta)
         elif carta.nombre == "Rey":
             self.show_rey_popup(self.partida.current_player, carta)
+        elif carta.nombre == "Chanceller":
+            # El Chanceller no necesita seleccionar un objetivo
+            carta_original = self.partida.current_player.mano[0] if self.partida.current_player.mano else None
+            self.show_chanciller_popup(self.partida.current_player, carta)
         else:
-            self.apply_effect(carta, self.partida.current_player)
+            # Para cartas sin efecto que requieren selección de objetivo
+            self.complete_card_play(carta)
+        
+        # Marcar que se jugó una carta
+        self.card_played = True
+
+    def on_target_selected(self, jugador, carta, target):
+        """
+        Maneja la selección de un objetivo para el efecto de una carta
+        """
+        if target:
+            if carta.nombre == "Guardia":
+                self.show_guardia_screen(jugador, carta)
+            elif carta.nombre == "Sacerdote":
+                self.show_target_card(self.partida.current_player, target, carta)
+                self.complete_card_play(carta)
+            elif carta.nombre == "Barón":
+                self.compare_hands(jugador, target, carta)
+            elif carta.nombre == "Príncipe":
+                self.discard_and_draw(target, carta)
+            elif carta.nombre == "Rey":
+                self.swap_hands(jugador, target, carta)
+            
+            # Marcar que se jugó una carta
+            self.card_played = True
+            
+        else:
+            self.log("Debes seleccionar un objetivo.")
+
+    def show_guardia_screen(self, jugador, carta):
+        guardia_screen = self.manager.get_screen('guardia')
+        guardia_screen.set_context(jugador, carta, self)
+        self.manager.current = 'guardia'
+
+    def show_sacerdote_popup(self, jugador, carta):
+        """
+        Muestra el popup para seleccionar el objetivo del Sacerdote
+        """
+        content = BoxLayout(orientation='vertical')
+        label = Label(text="Selecciona un jugador para ver su carta:")
+        content.add_widget(label)
+        
+        # Marcar que se jugó una carta inmediatamente
+        self.card_played = True
+        
+        # Crear botones para cada jugador que no sea el actual y no esté eliminado o protegido
+        target_buttons = GridLayout(cols=2, spacing=10, padding=10)
+        for target in self.partida.jugadores:
+            if target != jugador and not target.eliminado and not target.protegido:
+                btn = Button(
+                    text=target.nombre,
+                    size_hint_y=None,
+                    height=40,
+                    background_color=(0.6, 0.4, 0.2, 1),
+                    color=(1,1,1,1)
+                )
+                def create_callback(t=target):
+                    def on_press(instance):
+                        self.show_target_card(jugador, t, carta)
+                    return on_press
+                btn.bind(on_press=create_callback())
+                target_buttons.add_widget(btn)
+        
+        content.add_widget(target_buttons)
+        
+        # Si no hay objetivos válidos
+        if not target_buttons.children:
+            self.log("No hay objetivos válidos para el Sacerdote")
+            self.complete_card_play(carta)
+            return
+        
+        popup = Popup(
+            title='Efecto del Sacerdote',
+            content=content,
+            size_hint=(0.8, 0.8),
+            auto_dismiss=False
+        )
+        popup.open()
+
+    def show_target_card(self, jugador, target, carta):
+        """
+        Muestra la carta del jugador objetivo y completa el efecto del Sacerdote
+        """
+        if not target.mano:
+            self.log(f"{target.nombre} no tiene cartas en la mano")
+            self.complete_card_play(carta)
+            return
+            
+        carta_objetivo = target.mano[0]
+        
+        # Obtener la pantalla actual y la pantalla del juego
+        current_screen = self.manager.current_screen
+        game_screen = self.manager.get_screen('game')
+        
+        content = BoxLayout(orientation='vertical', spacing=10, padding=10)
+        
+        # Mostrar la carta del objetivo
+        card_image = Image(source=carta_objetivo.image_source, size_hint=(1, 0.6))
+        content.add_widget(card_image)
+        
+        info_text = f"Carta de {target.nombre}:\nNombre: {carta_objetivo.nombre}\nValor: {carta_objetivo.valor}"
+        content.add_widget(Label(text=info_text, color=(0.2,0.1,0,1)))
+        
+        # Botón para cerrar
+        close_btn = Button(
+            text="Continuar",
+            size_hint=(None, None),
+            size=(200, 50),
+            pos_hint={'center_x': 0.5}
+        )
+        
+        content.add_widget(close_btn)
+        
+        # Crear el popup antes de definir on_close para poder referenciarlo
+        target_popup = Popup(
+            title=f'Carta de {target.nombre}',
+            content=content,
+            size_hint=(0.8, 0.8),
+            auto_dismiss=False
+        )
+        
+        def on_close(instance):
+            target_popup.dismiss()
+            self.log(f"{jugador.nombre} vio la carta de {target.nombre}")
+            # Volver a la pantalla del juego
+            self.manager.current = 'game'
+            self.complete_card_play(carta)
+            
+        close_btn.bind(on_press=on_close)
+        target_popup.open()
+
+    def show_baron_popup(self, jugador, carta):
+        targets = [j for j in self.partida.jugadores if j != jugador and not j.eliminado and not j.protegido]
+        if not targets:
+            self.log("No hay objetivos disponibles para el Barón.")
+            self.complete_card_play(carta)
+            return
+        
+        content = BoxLayout(orientation='vertical')
+        label = Label(text="Selecciona un jugador para comparar cartas:")
+        content.add_widget(label)
+        
+        # Crear botones para cada jugador que no sea el actual y no esté eliminado o protegido
+        target_buttons = GridLayout(cols=2, spacing=10, padding=10)
+        for target in targets:
+            btn = Button(
+                text=target.nombre,
+                size_hint_y=None,
+                height=40,
+                background_color=(0.6, 0.4, 0.2, 1),
+                color=(1,1,1,1)
+            )
+            def create_callback(t=target, p=popup):
+                def on_press(instance):
+                    p.dismiss()  # Cerrar el popup usando la referencia correcta
+                    self.compare_hands(jugador, t, carta)
+                return on_press
+            btn.bind(on_press=create_callback())
+            target_buttons.add_widget(btn)
+        
+        content.add_widget(target_buttons)
+        
+        # Si no hay objetivos válidos
+        if not target_buttons.children:
+            self.log("No hay objetivos válidos para el Barón")
+            self.card_played = True  # Marcar que se jugó la carta aunque no haya efecto
+            self.complete_card_play(carta)
+            return
+        
+        popup = Popup(
+            title='Efecto del Barón',
+            content=content,
+            size_hint=(0.8, 0.8),
+            auto_dismiss=False
+        )
+        popup.open()
+
+    def baron_selected(self, jugador, target, carta):
+        if target.mano:
+            carta_jugador = [c for c in jugador.mano if c != carta][0]  # La otra carta en la mano
+            carta_objetivo = target.mano[0]
+            self.log(f"Comparando cartas: {jugador.nombre}({carta_jugador.nombre}) vs {target.nombre}({carta_objetivo.nombre})")
+            if carta_jugador.valor > carta_objetivo.valor:
+                self.log(f"{target.nombre} es eliminado")
+                target.eliminado = True
+            elif carta_jugador.valor < carta_objetivo.valor:
+                self.log(f"{jugador.nombre} es eliminado")
+                jugador.eliminado = True
+            else:
+                self.log("Empate, nadie es eliminado")
+        else:
+            self.log(f"{target.nombre} no tiene cartas para comparar")
+        popup.dismiss()
+        self.card_played = True
+        self.complete_card_play(carta)
+
+    def show_principe_popup(self, jugador, carta):
+        """
+        Muestra el popup para seleccionar el objetivo del Príncipe
+        """
+        # Obtener todos los jugadores no eliminados como objetivos válidos (incluyendo al jugador actual)
+        targets = [j for j in self.partida.jugadores if not j.eliminado and not j.protegido]
+        
+        if not targets:
+            self.log("No hay objetivos válidos para el Príncipe")
+            self.card_played = True
             self.next_button.disabled = False
-            self.next_turn()
+            self.complete_card_play(carta)
+            return
+            
+        content = BoxLayout(orientation='vertical', spacing=10, padding=10)
+        content.add_widget(Label(text="Selecciona un jugador para descartar su carta:", font_size='18sp'))
+        
+        # Layout para los botones
+        buttons_layout = GridLayout(cols=2, spacing=10, padding=10)
+
+        # Crear el popup antes de los botones para poder referenciarlo
+        principe_popup = Popup(
+            title='Efecto del Príncipe',
+            content=content,
+            size_hint=(0.8, 0.8),
+            auto_dismiss=False
+        )
+
+        for target in targets:
+            btn = Button(
+                text=target.nombre,
+                size_hint_y=None,
+                height=40,
+                background_color=(0.6, 0.4, 0.2, 1),
+                color=(1,1,1,1)
+            )
+            def create_callback(t=target, p=principe_popup):
+                def on_press(instance):
+                    p.dismiss()  # Cerrar el popup usando la referencia correcta
+                    self.descartar_y_robar(t, carta)
+                return on_press
+            btn.bind(on_press=create_callback())
+            buttons_layout.add_widget(btn)
+        
+        content.add_widget(buttons_layout)
+        principe_popup.open()
+
+    def descartar_y_robar(self, target, carta):
+        """
+        Descarta la carta del objetivo y le hace robar una nueva
+        """
+        if not target.mano:
+            self.log(f"{target.nombre} no tiene cartas para descartar")
+            self.complete_card_play(carta)
+            return
+            
+        # Obtener la carta a descartar
+        carta_descartada = target.mano[0]
+        
+        # Si descarta la Princesa, el jugador es eliminado
+        if carta_descartada.nombre == "Princesa":
+            self.log(f"{target.nombre} descartó la Princesa y queda eliminado")
+            target.eliminado = True
+            target.mano = []
+            self.complete_card_play(carta)
+            return
+            
+        # Descartar la carta actual
+        target.mano = []
+        self.discard_pile.update_card(carta_descartada)
+        
+        # Robar una nueva carta si quedan en el mazo
+        if self.partida.deck:
+            nueva_carta = self.partida.deck.pop(0)
+            target.mano = [nueva_carta]
+            self.log(f"{target.nombre} descartó {carta_descartada.nombre} y robó una nueva carta")
+        else:
+            self.log(f"{target.nombre} descartó {carta_descartada.nombre} pero no quedan cartas para robar")
+            
+        self.complete_card_play(carta)
+
+    def show_rey_popup(self, jugador, carta):
+        targets = [j for j in self.partida.jugadores if j != jugador and not j.eliminado and not j.protegido]
+        if not targets:
+            self.log("No hay objetivos disponibles para el Rey.")
+            self.complete_card_play(carta)
+            return
+        content = BoxLayout(orientation='vertical', spacing=10, padding=10)
+        content.add_widget(Label(text="Selecciona un jugador para intercambiar cartas:", font_size='18sp'))
+        
+        # Layout para los botones
+        target_buttons = GridLayout(cols=2, spacing=10, padding=10)
+
+        # Crear el popup antes de los botones para poder referenciarlo
+        rey_popup = Popup(
+            title='Efecto del Rey',
+            content=content,
+            size_hint=(0.8, 0.8),
+            auto_dismiss=False
+        )
+        
+        for target in targets:
+            btn = Button(
+                text=target.nombre,
+                size_hint_y=None,
+                height=40,
+                background_color=(0.6, 0.4, 0.2, 1),
+                color=(1,1,1,1)
+            )
+            def create_callback(t=target, p=rey_popup):
+                def on_press(instance):
+                    p.dismiss()  # Cerrar el popup usando la referencia correcta
+                    self.intercambiar_cartas(jugador, t, carta)
+                return on_press
+            btn.bind(on_press=create_callback())
+            target_buttons.add_widget(btn)
+        
+        content.add_widget(target_buttons)
+        rey_popup.open()
+
+    def intercambiar_cartas(self, jugador, target, carta):
+        """
+        Intercambia las cartas entre dos jugadores
+        """
+        if not target.mano:
+            self.log(f"{target.nombre} no tiene cartas para intercambiar")
+            self.complete_card_play(carta)
+            return
+            
+        # Obtener las cartas a intercambiar (excluyendo la carta Rey que se está jugando)
+        carta_jugador = [c for c in jugador.mano if c != carta][0] if jugador.mano else None
+        carta_target = target.mano[0] if target.mano else None
+        
+        if not carta_jugador or not carta_target:
+            self.log("No hay suficientes cartas para intercambiar")
+            self.complete_card_play(carta)
+            return
+            
+        # Realizar el intercambio
+        jugador.mano = [carta_target]
+        target.mano = [carta_jugador]
+        
+        self.log(f"{jugador.nombre} intercambió cartas con {target.nombre}")
+        self.complete_card_play(carta)
+        
+    def show_chanciller_popup(self, jugador, carta):
+        if len(self.partida.deck) < 2:
+            self.log("No hay suficientes cartas en el mazo para usar el Chanceller")
+            self.complete_card_play(carta)
+            return
+        
+        # Robar dos cartas
+        cartas_robadas = [self.partida.deck.pop(0) for _ in range(2)]
+        
+        content = BoxLayout(orientation='vertical', spacing=10, padding=10)
+        content.add_widget(Label(text="Selecciona una carta para quedarte:", font_size='18sp'))
+        
+        # Layout para los botones de cartas
+        button_box = GridLayout(cols=2, spacing=10, padding=10)
+
+        # Crear el popup antes de los botones
+        chanciller_popup = Popup(
+            title='Efecto del Chanceller',
+            content=content,
+            size_hint=(0.8, 0.8),
+            auto_dismiss=False
+        )
+
+        def on_select(carta_elegida):
+            # Quedarse con la carta elegida
+            jugador.mano = [carta_elegida]
+            
+            # Mostrar popup para ordenar las cartas a devolver
+            content_orden = BoxLayout(orientation='vertical', spacing=10, padding=10)
+            content_orden.add_widget(Label(text="Ordena las cartas para devolverlas al mazo (primera arriba):", font_size='18sp'))
+            
+            # Layout para los botones de cartas a devolver
+            button_box_orden = GridLayout(cols=1, spacing=10, padding=10)
+            cartas_devolver = [c for c in cartas_robadas if c != carta_elegida]
+            
+            orden_popup = Popup(
+                title='Ordenar cartas',
+                content=content_orden,
+                size_hint=(0.8, 0.8),
+                auto_dismiss=False
+            )
+
+            def on_orden_select(carta_orden):
+                # Devolver las cartas al mazo en el orden seleccionado
+                self.partida.deck.insert(0, carta_orden)
+                self.log(f"{jugador.nombre} ha usado el Chanceller y ha ordenado las cartas")
+                orden_popup.dismiss()
+                self.complete_card_play(carta)
+
+            for c in cartas_devolver:
+                btn = Button(
+                    text=c.nombre,
+                    size_hint_y=None,
+                    height=40,
+                    background_color=(0.6, 0.4, 0.2, 1),
+                    color=(1,1,1,1)
+                )
+                btn.bind(on_press=lambda instance, carta=c: on_orden_select(carta))
+                button_box_orden.add_widget(btn)
+
+            content_orden.add_widget(button_box_orden)
+            chanciller_popup.dismiss()
+            orden_popup.open()
+
+        # Crear botones para cada carta robada
+        for c in cartas_robadas:
+            btn = Button(
+                text=c.nombre,
+                size_hint_y=None,
+                height=40,
+                background_color=(0.6, 0.4, 0.2, 1),
+                color=(1,1,1,1)
+            )
+            btn.bind(on_press=lambda instance, carta=c: on_select(carta))
+            button_box.add_widget(btn)
+
+        content.add_widget(button_box)
+        chanciller_popup.open()
+
+    def show_chanciller_screen(self, jugador, carta, carta_original=None):
+        """
+        Muestra la pantalla para el efecto del Chanceller
+        """
+        # Robamos dos cartas adicionales del mazo
+        if len(self.partida.deck) >= 2:
+            cartas_adicionales = [self.partida.deck.pop(0) for _ in range(2)]
+        else:
+            self.log("No hay suficientes cartas en el mazo para el efecto del Chanceller")
+            self.complete_card_play(carta)
+            self.next_button.disabled = False
+            return
+        
+        # Mostramos la pantalla del Chanceller
+        chanciller_screen = self.manager.get_screen('chanciller')
+        chanciller_screen.set_context(jugador, carta, self, cartas_adicionales, carta_original)
+        self.manager.current = 'chanciller'
+
+    def show_baron_screen(self, jugador, carta):
+        content = BoxLayout(orientation='vertical')
+        label = Label(text="Selecciona un jugador para comparar manos:")
+        content.add_widget(label)
+        
+        # Crear botones para cada jugador que no sea el actual y no esté eliminado o protegido
+        target_buttons = GridLayout(cols=2, spacing=10, padding=10)
+        for target in self.partida.jugadores:
+            if target != jugador and not target.eliminado and not target.protegido:
+                btn = Button(
+                    text=target.nombre,
+                    size_hint_y=None,
+                    height=40,
+                    background_color=(0.6, 0.4, 0.2, 1),
+                    color=(1,1,1,1)
+                )
+                def create_callback(t=target, p=popup):
+                    def on_press(instance):
+                        p.dismiss()  # Cerrar el popup usando la referencia correcta
+                        self.on_target_selected(jugador, carta, t)
+                    return on_press
+                btn.bind(on_press=create_callback())
+                target_buttons.add_widget(btn)
+        
+        content.add_widget(target_buttons)
+        
+        # Si no hay objetivos válidos
+        if not target_buttons.children:
+            self.log("No hay objetivos válidos para el Barón")
+            self.card_played = True  # Marcar que se jugó la carta aunque no haya efecto
+            self.complete_card_play(carta)
+            return
+        
+        popup = Popup(
+            title='Efecto del Barón',
+            content=content,
+            size_hint=(0.8, 0.8),
+            auto_dismiss=False
+        )
+        popup.open()
+
+    def compare_hands(self, jugador, target, carta):
+        """
+        Compara las cartas de dos jugadores para el efecto del Barón
+        """
+        # Obtener las cartas de ambos jugadores
+        carta_jugador = jugador.mano[0] if jugador.mano else None
+        carta_target = target.mano[0] if target.mano else None
+        
+        if not carta_jugador or not carta_target:
+            self.log("Uno de los jugadores no tiene cartas para comparar")
+            return
+        
+        # Mostrar las cartas
+        content = BoxLayout(orientation='vertical', spacing=10, padding=10)
+        content.add_widget(Label(text=f"Carta de {jugador.nombre}: {carta_jugador.nombre} ({carta_jugador.valor})", font_size='18sp'))
+        content.add_widget(Label(text=f"Carta de {target.nombre}: {carta_target.nombre} ({carta_target.valor})", font_size='18sp'))
+        
+        # Determinar el ganador
+        if carta_jugador.valor > carta_target.valor:
+            content.add_widget(Label(text=f"{target.nombre} es eliminado del juego", font_size='20sp', color=(1, 0, 0, 1)))
+            target.eliminado = True
+        elif carta_jugador.valor < carta_target.valor:
+            content.add_widget(Label(text=f"{jugador.nombre} es eliminado del juego", font_size='20sp', color=(1, 0, 0, 1)))
+            jugador.eliminado = True
+        else:
+            content.add_widget(Label(text="¡Empate! Nadie es eliminado", font_size='20sp'))
+        
+        # Crear y mostrar el popup
+        popup = Popup(
+            title='Resultado de la comparación',
+            content=content,
+            size_hint=(0.8, 0.4),
+            auto_dismiss=True
+        )
+        
+        # Botón para cerrar
+        close_button = Button(
+            text="Cerrar",
+            size_hint=(None, None),
+            size=(100, 50),
+            pos_hint={'center_x': 0.5}
+        )
+        
+        def on_close(instance):
+            popup.dismiss()
+            self.card_played = True
+            self.next_button.disabled = False
+            self.complete_card_play(carta)
+        
+        close_button.bind(on_press=on_close)
+        content.add_widget(close_button)
+        
+        popup.open()
+
+    def remove_widget_after_anim(self, animation, widget):
+        """
+        Callback para remover un widget después de que termine su animación
+        """
+        if widget in self.hand_layout.children:
+            self.hand_layout.remove_widget(widget)
+
+    def play_card(self, carta):
+        """
+        Juega una carta de la mano del jugador actual
+        """
+        if self.card_played:
+            return
+        
+        self.card_played = True
+        jugador = self.partida.current_player
+        
+        # Remover la carta de la mano del jugador
+        if carta in jugador.mano:
+            jugador.mano.remove(carta)
+        
+        # Animar la carta hacia el mazo de descartes
+        card_widget = None
+        for widget in self.hand_layout.children:
+            if isinstance(widget, CardWidget) and widget.carta == carta:
+                card_widget = widget
+                break
+        
+        if card_widget:
+            # Obtener la posición del mazo de descartes
+            discard_pos = self.discard_pile.pos
+            
+            # Crear la animación
+            anim = Animation(opacity=0, duration=0.3)
+            anim.bind(on_complete=self.remove_widget_after_anim)
+            anim.start(card_widget)
+        
+        # Agregar la carta al mazo de descartes
+        self.partida.discard_pile.append(carta)
+        self.discard_pile.update_card(carta)
+        
+        # Manejar el efecto de la carta
+        if carta.nombre in ["Guardia", "Sacerdote", "Barón", "Príncipe", "Rey", "Chanceller"]:
+            self.elegir_jugador(carta)
+        else:
+            self.complete_card_play(carta)
+
+    def confirm_play_card(self, carta, popup):
+        """
+        Confirma jugar una carta después de ver sus detalles
+        """
+        # Verificar la regla de la Condesa
+        tiene_condesa = any(carta.nombre == "Condesa" for carta in self.partida.current_player.mano)
+        tiene_rey_o_principe = any(carta.nombre in ["Rey", "Príncipe"] for carta in self.partida.current_player.mano)
+        
+        if tiene_condesa and tiene_rey_o_principe and carta.nombre != "Condesa":
+            error_popup = Popup(title="Regla de la Condesa",
+                            content=Label(text="Si tienes la Condesa y el Rey o el Príncipe,\ndebes jugar la Condesa.",
+                                        color=(0.2,0.1,0,1)),
+                            size_hint=(None, None), size=(400, 200))
+            error_popup.open()
+            return
+
+        popup.dismiss()
+        self.play_card(carta)
 
     def show_card_details(self, carta):
+        """
+        Muestra los detalles de una carta y permite jugarla
+        """
         # Si ya se ha jugado una carta, no permitir jugar otra
         if self.card_played:
             popup = Popup(title='Aviso',
-                        content=Label(text='Ya has jugado una carta en este turno.',
+                        content=Label(text='Ya has jugado una carta.',
                                     color=(0.2,0.1,0,1)),
                         size_hint=(None, None), size=(400, 200))
             popup.open()
             return
 
         # Verificar la regla de la Condesa
-        tiene_condesa = any(c.nombre == "Condesa" for c in self.partida.current_player.mano)
-        tiene_rey_o_principe = any(c.nombre in ["Rey", "Príncipe"] for c in self.partida.current_player.mano)
+        tiene_condesa = any(carta.nombre == "Condesa" for carta in self.partida.current_player.mano)
+        tiene_rey_o_principe = any(carta.nombre in ["Rey", "Príncipe"] for carta in self.partida.current_player.mano)
         
         if tiene_condesa and tiene_rey_o_principe and carta.nombre != "Condesa":
             popup = Popup(title="Regla de la Condesa",
@@ -446,13 +1411,26 @@ class GameScreen(Screen):
             popup.open()
             return
 
-        layout = BoxLayout(orientation='vertical', spacing=10, padding=10)
+        content = BoxLayout(orientation='vertical', spacing=5, padding=5)
         
-        # Imagen y descripción
-        card_image = Image(source=carta.image_source, size_hint=(1, 0.6))
-        layout.add_widget(card_image)
-        info_text = f"Nombre: {carta.nombre}\nValor: {carta.valor}\nDescripción: {carta.descripcion}"
-        layout.add_widget(Label(text=info_text, color=(0.2,0.1,0,1)))
+        # Layout principal
+        card_layout = BoxLayout(orientation='vertical', size_hint=(1, 0.7))
+        card_image = Image(
+            source=carta.image_source,
+            size_hint=(None, None),
+            size=(180, 270),
+            pos_hint={'center_x': 0.5, 'center_y': 0.5}
+        )
+        card_layout.add_widget(card_image)
+        content.add_widget(card_layout)
+        
+        # Solo la descripción
+        content.add_widget(Label(
+            text=carta.descripcion,
+            font_size='16sp',
+            color=(0.2,0.1,0,1),
+            size_hint=(1, 0.2)
+        ))
         
         # Layout para botones
         btn_layout = BoxLayout(orientation='horizontal', spacing=10, size_hint_y=None, height=40)
@@ -473,12 +1451,13 @@ class GameScreen(Screen):
         )
         btn_layout.add_widget(play_btn)
         
-        layout.add_widget(btn_layout)
+        content.add_widget(btn_layout)
+        
         popup = Popup(
             title="Detalles de la carta",
-            content=layout,
+            content=content,
             size_hint=(None, None),
-            size=(400, 300),
+            size=(300, 450),
             auto_dismiss=False
         )
         
@@ -488,330 +1467,35 @@ class GameScreen(Screen):
         
         popup.open()
 
-    def confirm_play_card(self, carta, popup):
-        # Verificar la regla de la Condesa
-        tiene_condesa = any(c.nombre == "Condesa" for c in self.partida.current_player.mano)
-        tiene_rey_o_principe = any(c.nombre in ["Rey", "Príncipe"] for c in self.partida.current_player.mano)
-        
-        if tiene_condesa and tiene_rey_o_principe and carta.nombre != "Condesa":
-            error_popup = Popup(title="Regla de la Condesa",
-                            content=Label(text="Si tienes la Condesa y el Rey o el Príncipe,\ndebes jugar la Condesa.",
-                                        color=(0.2,0.1,0,1)),
-                            size_hint=(None, None), size=(400, 200))
-            error_popup.open()
-            return
-
-        popup.dismiss()
-        self.play_card(carta)
-
-    def play_card(self, carta):
-        if self.partida and carta in self.partida.current_player.mano:
-            self.card_played = True
-            
-            # Si la carta requiere selección de jugador, esperar a que se complete la acción
-            if carta.nombre in ["Guardia", "Sacerdote", "Barón", "Príncipe", "Rey"]:
-                self.elegir_jugador(carta)
-                return  # Se espera la interacción del usuario
-            
-            # Si no requiere selección, proceder con el descarte
-            self.complete_card_play(carta)
-        else:
-            self.log("Carta no encontrada en la mano.")
-
     def complete_card_play(self, carta):
-        # Eliminar la carta de la mano
-        if carta in self.partida.current_player.mano:
-            self.partida.current_player.mano.remove(carta)
-            self.discard_pile.update_card(carta)
-            self.log(f"{self.partida.current_player.nombre} juega: {carta}")
-
-            # Animación para quitar la carta jugada de la mano
-            for child in self.hand_layout.children[:]:
-                if hasattr(child, 'carta') and child.carta == carta:
-                    anim = Animation(opacity=0, duration=0.3)
-                    def remove_widget_after_anim(animation, widget):
-                        if widget in self.hand_layout.children:
-                            self.hand_layout.remove_widget(widget)
-                    anim.bind(on_complete=remove_widget_after_anim)
-                    anim.start(child)
-                    break
-
-            # Aplicar el efecto de la carta
-            self.apply_effect(carta, self.partida.current_player)
-
-            # Verificar si hay ganador
-            ganador = self.partida.determinar_ganador()
-            if ganador:
-                popup = Popup(title="Juego Terminado",
-                            content=Label(text=f"¡El ganador es {ganador.nombre} con {ganador.mostrar_mano()}!", color=(0, 0, 0, 1)),
-                            size_hint=(None, None), size=(400, 300))
-                popup.open()
-                self.log(f"¡El ganador es {ganador.nombre}!")
-                return
-
-            self.next_button.disabled = False
-
-    def apply_effect(self, carta, jugador):
-        if carta.nombre == "Espía":
-            self.log(f"El efecto del Espía aún no está implementado")
-            self.next_button.disabled = False
-        elif carta.nombre == "Guardia":
-            self.show_guardia_popup(jugador, carta)
-        elif carta.nombre == "Sacerdote":
-            self.show_sacerdote_popup(jugador, carta)
-        elif carta.nombre == "Barón":
-            self.show_baron_popup(jugador, carta)
-        elif carta.nombre == "Doncella":
-            jugador.protegido = True
-            self.log(f"{jugador.nombre} está protegido hasta su próximo turno")
-            self.next_button.disabled = False
-        elif carta.nombre == "Príncipe":
-            self.show_principe_popup(jugador, carta)
-        elif carta.nombre == "Chanceller":
-            self.show_chanceller_popup(jugador, carta)
-        elif carta.nombre == "Rey":
-            self.show_rey_popup(jugador, carta)
-        elif carta.nombre == "Condesa":
-            pass  # La Condesa no tiene efecto
-            self.next_button.disabled = False
-        elif carta.nombre == "Princesa":
-            self.log(f"{jugador.nombre} ha jugado la Princesa y pierde")
+        """
+        Completa el efecto de una carta y actualiza el estado del juego
+        """
+        # Asegurarse de que la carta se marque como jugada
+        self.card_played = True
+        
+        # Si es la princesa, el jugador queda eliminado
+        if carta.nombre == "Princesa":
+            jugador = self.partida.current_player
             jugador.eliminado = True
+            self.log(f"{jugador.nombre} jugó la Princesa y queda eliminado")
+            
+            # Descartar las cartas restantes del jugador eliminado
+            for carta_restante in jugador.mano:
+                self.partida.discard_pile.append(carta_restante)
+                self.discard_pile.update_card(carta_restante)
             jugador.mano.clear()
-            self.next_button.disabled = False
-        else:
-            self.log(f"{carta.nombre} no tiene efecto implementado.")
-            self.next_button.disabled = False
-
-    def show_guardia_popup(self, jugador, carta):
-        if self.is_processing_effect:  # Si ya estamos procesando un efecto, no hacer nada
-            return
-            
-        targets = [j for j in self.partida.jugadores if j != jugador and not j.eliminado and not j.protegido]
-        if not targets:
-            self.log("No hay objetivos disponibles para el Guardia.")
-            self.complete_card_play(carta)  # Descartar la carta incluso si no hay objetivos
-            return
-            
-        # Crear un nuevo BoxLayout para cada popup
-        content = BoxLayout(orientation='vertical', spacing=10, padding=10)
-        content.add_widget(Label(text="Selecciona un jugador objetivo:", color=(0.2,0.1,0,1)))
         
-        # Crear un nuevo BoxLayout para los botones
-        target_buttons = BoxLayout(orientation='vertical', spacing=5)
-        for target in targets:
-            btn = Button(text=target.nombre, size_hint_y=None, height=40,
-                         background_color=(0.6, 0.4, 0.2, 1), color=(1,1,1,1))
-            btn.bind(on_press=lambda inst, t=target: self.show_guardia_screen(jugador, carta))
-            target_buttons.add_widget(btn)
-            
-        content.add_widget(target_buttons)
-        
-        popup = Popup(title="Efecto Guardia", 
-                     content=content,
-                     size_hint=(None, None), 
-                     size=(400, 300))
-        popup.open()
-
-    def show_guardia_screen(self, jugador, carta):
-        guardia_screen = self.manager.get_screen('guardia')
-        guardia_screen.set_context(jugador, carta, self)
-        self.manager.current = 'guardia'
-
-    def show_sacerdote_popup(self, jugador, carta):
-        if self.is_processing_effect:  # Si ya estamos procesando un efecto, no hacer nada
-            return
-            
-        targets = [j for j in self.partida.jugadores if j != jugador and not j.eliminado and not j.protegido]
-        if not targets:
-            self.log("No hay objetivos disponibles para el Sacerdote.")
-            self.complete_card_play(carta)  # Descartar la carta incluso si no hay objetivos
-            return
-            
-        content = BoxLayout(orientation='vertical', spacing=10, padding=10)
-        content.add_widget(Label(text="Selecciona un jugador para ver su mano:", color=(0.2,0.1,0,1)))
-        target_buttons = BoxLayout(orientation='vertical', spacing=5)
-        popup = Popup(title="Efecto Sacerdote", content=content,
-                      size_hint=(None, None), size=(400, 300))
-        
-        for target in targets:
-            btn = Button(text=target.nombre, size_hint_y=None, height=40,
-                         background_color=(0.6, 0.4, 0.2, 1), color=(1,1,1,1))
-            btn.bind(on_press=lambda inst, t=target: self.sacerdote_selected(t, carta, popup))
-            target_buttons.add_widget(btn)
-        content.add_widget(target_buttons)
-        popup.open()
-
-    def sacerdote_selected(self, target, carta, popup):
-        if self.is_processing_effect:  # Si ya estamos procesando un efecto, no hacer nada
-            return
-            
-        self.is_processing_effect = True  # Marcar que estamos procesando
-        
-        # Mostrar la mano del jugador objetivo
-        if target.mano:
-            cartas_mano = [carta.nombre for carta in target.mano]
-            self.log(f"La mano de {target.nombre} es: {', '.join(cartas_mano)}")
-        else:
-            self.log(f"{target.nombre} no tiene cartas en la mano.")
-        popup.dismiss()  # Cerrar el popup después de mostrar la información
-        self.complete_card_play(carta)
-        
-        self.is_processing_effect = False  # Resetear el estado
-
-    def show_baron_popup(self, jugador, carta):
-        targets = [j for j in self.partida.jugadores if j != jugador and not j.eliminado and not j.protegido]
-        if not targets:
-            self.log("No hay objetivos disponibles para el Barón.")
-            self.complete_card_play(carta)
-            return
-        content = BoxLayout(orientation='vertical', spacing=10, padding=10)
-        content.add_widget(Label(text="Selecciona el jugador para comparar cartas:", color=(0.2,0.1,0,1)))
-        target_buttons = BoxLayout(orientation='vertical', spacing=5)
-        popup = Popup(title="Efecto Barón", content=content,
-                      size_hint=(None, None), size=(400,300))
-        for target in targets:
-            btn = Button(text=target.nombre, size_hint_y=None, height=40,
-                         background_color=(0.6, 0.4, 0.2, 1), color=(1,1,1,1))
-            btn.bind(on_press=lambda inst, t=target, c=carta, p=popup: self.baron_selected(jugador, t, c, p))
-            target_buttons.add_widget(btn)
-        content.add_widget(target_buttons)
-        popup.open()
-
-    def baron_selected(self, jugador, target, carta, popup):
-        if target.mano:
-            carta_jugador = [c for c in jugador.mano if c != carta][0]  # La otra carta en la mano
-            carta_objetivo = target.mano[0]
-            self.log(f"Comparando cartas: {jugador.nombre}({carta_jugador.nombre}) vs {target.nombre}({carta_objetivo.nombre})")
-            if carta_jugador.valor > carta_objetivo.valor:
-                self.log(f"{target.nombre} es eliminado")
-                target.eliminado = True
-            elif carta_jugador.valor < carta_objetivo.valor:
-                self.log(f"{jugador.nombre} es eliminado")
-                jugador.eliminado = True
-            else:
-                self.log("Empate, nadie es eliminado")
-        else:
-            self.log(f"{target.nombre} no tiene cartas para comparar")
-        popup.dismiss()
-        self.complete_card_play(carta)
-
-    def show_principe_popup(self, jugador, carta):
-        targets = [j for j in self.partida.jugadores if j != jugador and not j.eliminado and not j.protegido]
-        targets.append(jugador)  # El Príncipe puede afectar al jugador que lo usa
-        if not targets:
-            self.log("No hay objetivos disponibles para el Príncipe.")
-            self.complete_card_play(carta)
-            return
-        content = BoxLayout(orientation='vertical', spacing=10, padding=10)
-        content.add_widget(Label(text="Selecciona un jugador para descartar su mano:", color=(0.2,0.1,0,1)))
-        target_buttons = BoxLayout(orientation='vertical', spacing=5)
-        popup = Popup(title="Efecto Príncipe", content=content,
-                      size_hint=(None, None), size=(400, 300))
-        for target in targets:
-            btn = Button(text=target.nombre, size_hint_y=None, height=40,
-                         background_color=(0.6, 0.4, 0.2, 1), color=(1,1,1,1))
-            btn.bind(on_press=lambda inst, t=target, c=carta, p=popup: self.principe_selected(t, c, p))
-            target_buttons.add_widget(btn)
-        content.add_widget(target_buttons)
-        popup.open()
-
-    def principe_selected(self, target, carta, popup):
-        if target.mano:
-            carta_descartada = target.mano[0]
-            if carta_descartada.nombre == "Princesa":
-                self.log(f"{target.nombre} descartó la Princesa y queda eliminado")
-                target.eliminado = True
-            else:
-                self.log(f"{target.nombre} descarta: {carta_descartada.nombre}")
-                target.mano.remove(carta_descartada)
-                self.discard_pile.update_card(carta_descartada)
-                # Robar nueva carta si quedan en el mazo
-                if self.partida.hay_baraja():
-                    nueva_carta = self.partida.robar_carta(target)
-                    self.log(f"{target.nombre} roba una nueva carta")
-                else:
-                    self.log("No quedan cartas en el mazo")
-        else:
-            self.log(f"{target.nombre} no tiene cartas para descartar")
-        popup.dismiss()  # Cerrar el popup
-        self.complete_card_play(carta)  # Completar el juego de la carta
-
-    def show_rey_popup(self, jugador, carta):
-        targets = [j for j in self.partida.jugadores if j != jugador and not j.eliminado and not j.protegido]
-        if not targets:
-            self.log("No hay objetivos disponibles para el Rey.")
-            self.complete_card_play(carta)
-            return
-        content = BoxLayout(orientation='vertical', spacing=10, padding=10)
-        content.add_widget(Label(text="Selecciona un jugador para intercambiar manos:", color=(0.2,0.1,0,1)))
-        target_buttons = BoxLayout(orientation='vertical', spacing=5)
-        popup = Popup(title="Efecto Rey", content=content,
-                      size_hint=(None, None), size=(400, 300))
-        for target in targets:
-            btn = Button(text=target.nombre, size_hint_y=None, height=40,
-                         background_color=(0.6, 0.4, 0.2, 1), color=(1,1,1,1))
-            btn.bind(on_press=lambda inst, t=target, c=carta, p=popup: self.rey_selected(jugador, t, c, p))
-            target_buttons.add_widget(btn)
-        content.add_widget(target_buttons)
-        popup.open()
-
-    def rey_selected(self, jugador, target, carta, popup):
-        if target.mano and jugador.mano:
-            # Intercambiar solo la carta que tienen en mano (siempre debería ser una)
-            carta_jugador = jugador.mano[0] if jugador.mano else None
-            carta_target = target.mano[0] if target.mano else None
-            
-            if carta_jugador and carta_target:
-                jugador.mano = [carta_target]
-                target.mano = [carta_jugador]
-                self.log(f"{jugador.nombre} y {target.nombre} intercambian sus cartas")
-                self.update_ui()  # Actualizar la interfaz para mostrar la nueva mano
-            else:
-                self.log("Error: Algún jugador no tiene carta para intercambiar")
-        else:
-            self.log("No se puede realizar el intercambio porque algún jugador no tiene cartas")
-        popup.dismiss()
+        # Habilitar el botón de siguiente turno
         self.next_button.disabled = False
-        self.complete_card_play(carta)
-
-    def show_chanceller_popup(self, jugador, carta):
-        if len(self.partida.mazo) < 2:
-            self.log("No hay suficientes cartas en el mazo para usar el Chanceller")
-            self.complete_card_play(carta)
-            return
         
-        # Robar dos cartas
-        cartas_robadas = [self.partida.mazo.pop(0) for _ in range(2)]
+        # Actualizar la interfaz
+        self.update_ui()
         
-        content = BoxLayout(orientation='vertical')
-        label = Label(text="Selecciona una carta para conservar")
-        button_box = BoxLayout(orientation='horizontal')
-        
-        popup = Popup(title='Efecto del Chanceller',
-                     content=content,
-                     size_hint=(0.8, 0.4))
-        
-        def on_select(carta_elegida):
-            # Conservar la carta elegida
-            jugador.mano.append(carta_elegida)
-            # Devolver la otra carta al mazo
-            carta_devuelta = next(c for c in cartas_robadas if c != carta_elegida)
-            self.partida.mazo.append(carta_devuelta)
-            # Barajar el mazo
-            random.shuffle(self.partida.mazo)
-            self.log(f"{jugador.nombre} ha usado el Chanceller y ha elegido una carta")
-            popup.dismiss()
-            self.complete_card_play(carta)
-        
-        for c in cartas_robadas:
-            btn = Button(text=c.nombre)
-            btn.bind(on_press=lambda btn, c=c: on_select(c))
-            button_box.add_widget(btn)
-        
-        content.add_widget(label)
-        content.add_widget(button_box)
-        popup.open()
+        # Verificar si hay ganador
+        ganador = self.partida.determinar_ganador()
+        if ganador:
+            self.show_winner_popup(ganador)
 
 # -----------------------------
 # Widget para el mazo de descartes
