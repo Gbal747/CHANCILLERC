@@ -845,8 +845,9 @@ class GameScreen(Screen):
                     background_color=(0.6, 0.4, 0.2, 1),
                     color=(1,1,1,1)
                 )
-                def create_callback(t=target):
+                def create_callback(t=target, p=popup):
                     def on_press(instance):
+                        p.dismiss()
                         self.show_target_card(jugador, t, carta)
                     return on_press
                 btn.bind(on_press=create_callback())
