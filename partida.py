@@ -8,6 +8,7 @@ class Partida:
         barajar(self.deck)
         self.turn = 0
         self.current_player = None
+        self.discard_pile = []  # Pila de descarte para las cartas jugadas
 
     def repartir_inicial(self):
         for jugador in self.jugadores:
