@@ -332,7 +332,7 @@ class ChancillerScreen(Screen):
             size_hint=(1, 0.3)
         )
         self.return_instruction = Label(
-            text="Ordena las cartas restantes para devolverlas al mazo:",
+            text="Ordena las cartas restantes para devolverlas al mazo (primera será la superior):",
             size_hint=(1, 0.2),
             font_size='18sp',
             color=(0.2, 0.1, 0, 1),
@@ -354,13 +354,14 @@ class ChancillerScreen(Screen):
             size_hint=(0.3, 0.1),
             pos_hint={'center_x': 0.5},
             background_color=(0.6, 0.4, 0.2, 1),
-            color=(1, 1, 1, 1)
+            color=(1, 1, 1, 1),
+            disabled=True
         )
         self.layout.add_widget(self.confirm_btn)
 
     def set_context(self, jugador_actual, carta, game_screen, cartas_adicionales, carta_original):
         self.jugador_actual = jugador_actual
-        self.carta = carta  # Esta es la carta del Chanceller
+        self.carta = carta  # Esta es la carta del Chanciller
         self.game_screen = game_screen
         self.cartas_adicionales = cartas_adicionales
         self.carta_original = carta_original
@@ -375,7 +376,7 @@ class ChancillerScreen(Screen):
         
         # Mostrar todas las cartas disponibles (la original más las dos robadas)
         todas_las_cartas = [self.carta_original] + self.cartas_adicionales
-        for i, carta in enumerate(todas_las_cartas):
+        for carta in todas_las_cartas:
             card_btn = Button(
                 text=carta.nombre,
                 size_hint=(0.3, 0.8),
@@ -422,27 +423,28 @@ class ChancillerScreen(Screen):
             # Si la carta ya estaba en el orden, la quitamos
             self.return_order.remove(carta)
             instance.background_color = (0.6, 0.4, 0.2, 1)
+            instance.text = carta.nombre
         else:
-            # Si no estaba, la añadimos
-            self.return_order.append(carta)
-            instance.background_color = (0, 0.7, 0, 1)
-            # Añadimos un número para indicar el orden
-            instance.text = f"{carta.nombre} ({len(self.return_order)})"
+            # Si no estaba y hay espacio, la añadimos
+            if len(self.return_order) < 2:
+                self.return_order.append(carta)
+                instance.background_color = (0, 0.7, 0, 1)
+                instance.text = f"{carta.nombre} ({len(self.return_order)})"
         
         # Habilitamos el botón de confirmar solo si todas las cartas están ordenadas
         self.confirm_btn.disabled = len(self.return_order) != 2
 
     def on_confirm(self, instance):
         if self.selected_card and len(self.return_order) == 2:
-            # Actualizamos la mano del jugador
+            # Actualizamos la mano del jugador con la carta seleccionada
             self.jugador_actual.mano = [self.selected_card]
             
-            # Añadimos las cartas al final del mazo en el orden seleccionado
-            for carta in self.return_order:
-                self.game_screen.partida.deck.append(carta)  # Cambiado de mazo a deck
+            # Añadimos las cartas al final del mazo en el orden seleccionado (primero va arriba)
+            for carta in reversed(self.return_order):
+                self.game_screen.partida.deck.insert(0, carta)
             
             # Registramos la acción en el log
-            self.game_screen.log(f"{self.jugador_actual.nombre} se queda con una carta y devuelve dos al mazo")
+            self.game_screen.log(f"{self.jugador_actual.nombre} se queda con {self.selected_card.nombre} y devuelve dos cartas al mazo")
             
             # Completamos el efecto
             self.game_screen.complete_card_play(self.carta)
@@ -785,7 +787,7 @@ class GameScreen(Screen):
         elif carta.nombre == "Chanceller":
             # El Chanceller no necesita seleccionar un objetivo
             carta_original = self.partida.current_player.mano[0] if self.partida.current_player.mano else None
-            self.show_chanciller_popup(self.partida.current_player, carta)
+            self.show_chanciller_screen(self.partida.current_player, carta, carta_original)
         else:
             # Para cartas sin efecto que requieren selección de objetivo
             self.complete_card_play(carta)
@@ -1362,7 +1364,11 @@ class GameScreen(Screen):
         self.discard_pile.update_card(carta)
         
         # Manejar el efecto de la carta
-        if carta.nombre in ["Guardia", "Sacerdote", "Barón", "Príncipe", "Rey", "Chanceller"]:
+        if carta.nombre == "Chanceller":
+            # El Chanceller no necesita seleccionar un objetivo
+            carta_original = [c for c in jugador.mano if c != carta][0] if jugador.mano else None
+            self.show_chanciller_screen(jugador, carta, carta_original)
+        elif carta.nombre in ["Guardia", "Sacerdote", "Barón", "Príncipe", "Rey"]:
             self.elegir_jugador(carta)
         else:
             self.complete_card_play(carta)
