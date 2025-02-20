@@ -2,11 +2,13 @@
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager
 from interfaz import SetupScreen, GameScreen
-from interfaz import GuardiaScreen
+from interfaz import GuardiaScreen, ChancillerScreen
+
 
 class CardGameApp(App):
     def build(self):
         # Configuración de la ventana (color de fondo, etc.) se puede definir aquí
+        
         from kivy.core.window import Window
         Window.clearcolor = (0.95, 0.9, 0.8, 1)  # Color pergamino
 
@@ -14,6 +16,7 @@ class CardGameApp(App):
         sm.add_widget(SetupScreen(name='setup'))
         sm.add_widget(GameScreen(name='game'))
         sm.add_widget(GuardiaScreen(name='guardia'))
+        sm.add_widget(ChancillerScreen(name='chanciller'))
         return sm
 
 if __name__ == '__main__':
