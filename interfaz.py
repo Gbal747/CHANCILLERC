@@ -10,7 +10,7 @@ from kivy.animation import Animation
 from kivy.graphics import Color, Rectangle
 from kivy.core.window import Window
 from kivy.uix.gridlayout import GridLayout
-
+from kivy.uix.relativelayout import RelativeLayout
 from jugadores import Jugador
 from partida import Partida
 
@@ -290,167 +290,6 @@ class BaronScreen(Screen):
         self.game_screen.complete_card_play(self.carta)
         self.game_screen.next_button.disabled = False
         self.game_screen.manager.current = 'game'
-
-# Nueva pantalla para el efecto del Chanceller
-class ChancillerScreen(Screen):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.jugador_actual = None
-        self.carta = None
-        self.game_screen = None
-        self.cartas_adicionales = []
-        self.carta_original = None
-        self.selected_card = None
-        self.return_order = []
-        
-        # Layout principal
-        self.layout = BoxLayout(orientation='vertical', padding=[20, 30, 20, 10], spacing=10)
-        self.add_widget(self.layout)
-        
-        # Instrucciones
-        self.instruction_label = Label(
-            text="Selecciona una carta para quedarte:",
-            size_hint=(1, 0.1),
-            font_size='18sp',
-            color=(0.2, 0.1, 0, 1)
-        )
-        self.layout.add_widget(self.instruction_label)
-        
-        # Layout para mostrar las cartas
-        self.cards_layout = BoxLayout(
-            orientation='horizontal',
-            spacing=10,
-            size_hint=(1, 0.5),
-            pos_hint={'center_x': 0.5}
-        )
-        self.layout.add_widget(self.cards_layout)
-        
-        # Layout para el orden de retorno
-        self.return_layout = BoxLayout(
-            orientation='vertical',
-            spacing=10,
-            size_hint=(1, 0.3)
-        )
-        self.return_instruction = Label(
-            text="Ordena las cartas restantes para devolverlas al mazo (primera será la superior):",
-            size_hint=(1, 0.2),
-            font_size='18sp',
-            color=(0.2, 0.1, 0, 1),
-            opacity=0
-        )
-        self.return_layout.add_widget(self.return_instruction)
-        
-        self.return_cards_layout = BoxLayout(
-            orientation='horizontal',
-            spacing=10,
-            size_hint=(1, 0.8)
-        )
-        self.return_layout.add_widget(self.return_cards_layout)
-        self.layout.add_widget(self.return_layout)
-        
-        # Botón de confirmar
-        self.confirm_btn = Button(
-            text="Confirmar",
-            size_hint=(0.3, 0.1),
-            pos_hint={'center_x': 0.5},
-            background_color=(0.6, 0.4, 0.2, 1),
-            color=(1, 1, 1, 1),
-            disabled=True
-        )
-        self.layout.add_widget(self.confirm_btn)
-
-    def set_context(self, jugador_actual, carta, game_screen, cartas_adicionales, carta_original):
-        self.jugador_actual = jugador_actual
-        self.carta = carta  # Esta es la carta del Chanciller
-        self.game_screen = game_screen
-        self.cartas_adicionales = cartas_adicionales
-        self.carta_original = carta_original
-        self.selected_card = None
-        self.return_order = []
-        self.build_ui()
-
-    def build_ui(self):
-        self.cards_layout.clear_widgets()
-        self.return_cards_layout.clear_widgets()
-        self.return_instruction.opacity = 0
-        
-        # Mostrar todas las cartas disponibles (la original más las dos robadas)
-        todas_las_cartas = [self.carta_original] + self.cartas_adicionales
-        for carta in todas_las_cartas:
-            card_btn = Button(
-                text=carta.nombre,
-                size_hint=(0.3, 0.8),
-                background_color=(0.6, 0.4, 0.2, 1),
-                color=(1, 1, 1, 1)
-            )
-            card_btn.bind(on_press=lambda instance, c=carta: self.select_card(instance, c))
-            self.cards_layout.add_widget(card_btn)
-            
-        self.confirm_btn.bind(on_press=self.on_confirm)
-        self.confirm_btn.disabled = True
-
-    def select_card(self, instance, carta):
-        # Si ya teníamos una carta seleccionada, restauramos su color
-        for child in self.cards_layout.children:
-            child.background_color = (0.6, 0.4, 0.2, 1)
-        
-        # Marcamos la nueva carta seleccionada
-        instance.background_color = (0, 1, 0, 1)
-        self.selected_card = carta
-        
-        # Preparamos el layout para ordenar las cartas restantes
-        self.return_cards_layout.clear_widgets()
-        self.return_order = []
-        
-        # Mostramos las cartas restantes para ordenarlas
-        cartas_restantes = [c for c in ([self.carta_original] + self.cartas_adicionales) if c != carta]
-        self.return_instruction.opacity = 1
-        
-        for carta_rest in cartas_restantes:
-            card_btn = Button(
-                text=carta_rest.nombre,
-                size_hint=(0.3, 0.8),
-                background_color=(0.6, 0.4, 0.2, 1),
-                color=(1, 1, 1, 1)
-            )
-            card_btn.bind(on_press=lambda instance, c=carta_rest: self.add_to_return_order(instance, c))
-            self.return_cards_layout.add_widget(card_btn)
-        
-        self.confirm_btn.disabled = True
-
-    def add_to_return_order(self, instance, carta):
-        if carta in self.return_order:
-            # Si la carta ya estaba en el orden, la quitamos
-            self.return_order.remove(carta)
-            instance.background_color = (0.6, 0.4, 0.2, 1)
-            instance.text = carta.nombre
-        else:
-            # Si no estaba y hay espacio, la añadimos
-            if len(self.return_order) < 2:
-                self.return_order.append(carta)
-                instance.background_color = (0, 0.7, 0, 1)
-                instance.text = f"{carta.nombre} ({len(self.return_order)})"
-        
-        # Habilitamos el botón de confirmar solo si todas las cartas están ordenadas
-        self.confirm_btn.disabled = len(self.return_order) != 2
-
-    def on_confirm(self, instance):
-        if self.selected_card and len(self.return_order) == 2:
-            # Actualizamos la mano del jugador con la carta seleccionada
-            self.jugador_actual.mano = [self.selected_card]
-            
-            # Añadimos las cartas al final del mazo en el orden seleccionado (primero va arriba)
-            for carta in reversed(self.return_order):
-                self.game_screen.partida.deck.insert(0, carta)
-            
-            # Registramos la acción en el log
-            self.game_screen.log(f"{self.jugador_actual.nombre} se queda con {self.selected_card.nombre} y devuelve dos cartas al mazo")
-            
-            # Completamos el efecto
-            self.game_screen.complete_card_play(self.carta)
-            self.game_screen.next_button.disabled = False
-            self.game_screen.manager.current = 'game'
-
 # -----------------------------
 # Widget para representar una carta
 # -----------------------------
@@ -541,7 +380,191 @@ class SetupScreen(Screen):
         game_screen = self.manager.get_screen('game')
         game_screen.start_game(players)
         self.manager.current = 'game'
+class ChancillerScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.jugador_actual = None
+        self.carta = None
+        self.game_screen = None
+        
+        # Layout principal
+        self.layout = BoxLayout(orientation='vertical', padding=[20, 30, 20, 10], spacing=10)
+        self.add_widget(self.layout)
+        
+        # Instrucción
+        self.instruction_label = Label(
+            text="Elige una carta para quedártela y devuelve dos al final del mazo en el orden que quieras:",
+            size_hint=(1, 0.2),
+            font_size='18sp',
+            color=(0.2, 0.1, 0, 1)
+        )
+        self.layout.add_widget(self.instruction_label)
+        
+        # Layout para las cartas en posiciones específicas
+        self.card_section = RelativeLayout(size_hint=(1, 0.6))
+        self.layout.add_widget(self.card_section)
+        
+        # Botón de confirmar
+        self.confirm_btn = Button(
+            text="Confirmar",
+            size_hint=(0.3, 0.2),
+            pos_hint={'center_x': 0.5},
+            background_color=(0.6, 0.4, 0.2, 1),
+            color=(1, 1, 1, 1)
+        )
+        self.layout.add_widget(self.confirm_btn)
+        self.confirm_btn.bind(on_press=self.on_confirm)
+        
+        self.selected_card = None
+        self.cards_drawn = []
+    
+    def set_context(self, jugador_actual, carta, game_screen):
+        self.jugador_actual = jugador_actual
+        self.carta = carta
+        self.game_screen = game_screen
+        self.selected_card = None
+        self.cards_drawn = self.draw_two_cards()
+        self.cards_drawn.append(self.jugador_actual.mano.pop())  # Agregar la carta que ya tenía
+        self.build_ui()
+    
+    def draw_two_cards(self):
+        """Robar dos cartas del mazo."""
+        if len(self.game_screen.partida.deck) < 2:
+            return self.game_screen.partida.deck[:]
+        return [self.game_screen.partida.deck.pop(0) for _ in range(2)]
+    
+    def build_ui(self):
+        self.card_section.clear_widgets()
+        
+        positions = [{'center_x': 0.5, 'center_y': 0.5}, {'center_x': 0.2, 'center_y': 0.5}, {'center_x': 0.8, 'center_y': 0.5}]
+        
+        for i, card in enumerate(self.cards_drawn):
+            card_btn = Image(
+                source=card.image_source,
+                size_hint=(None, None),
+                size=(150, 200),
+                pos_hint=positions[i]
+            )
+            card_btn.bind(
+                on_touch_down=lambda instance, touch, c=card: self.select_card(c) if instance.collide_point(*touch.pos) else None
+            )
+            card_btn.bind(
+                on_touch_move=lambda instance, touch, c=card: self.highlight_card(instance, touch, c) if instance.collide_point(*touch.pos) else None
+            )
+            card_btn.bind(
+                on_touch_up=lambda instance, touch, c=card: self.remove_highlight(instance, touch, c) if instance.collide_point(*touch.pos) else None
+            )
+            self.card_section.add_widget(card_btn)
+    
+    def highlight_card(self, instance, touch, card):
+        """Resalta la carta cuando el ratón pasa sobre ella."""
+        if self.selected_card != card:
+            instance.size = (170, 220)  # Aumentar tamaño
+            instance.opacity = 0.8  # Hacerla ligeramente transparente
+    
+    def remove_highlight(self, instance, touch, card):
+        """Elimina el resaltado cuando el ratón ya no está sobre la carta."""
+        if self.selected_card != card:
+            instance.size = (150, 200)  # Tamaño original
+            instance.opacity = 1  # Opacidad normal
+    
+    def select_card(self, card):
+        """Método para seleccionar la carta al hacer click sobre ella"""
+        if self.selected_card == card:
+            return  # Si la carta ya está seleccionada, no hacer nada
+        self.selected_card = card
+        print(f"Carta seleccionada: {card.nombre}")  # Para depurar
+        
+        # Al seleccionar la carta, podemos cambiar su estilo visual (por ejemplo, bordes)
+        for child in self.card_section.children:
+            if isinstance(child, Image):
+                if child.source == card.image_source:
+                    child.opacity = 1  # Asegurarse de que la carta seleccionada esté completamente visible
+                    child.size = (170, 220)  # Tamaño resaltado
+                else:
+                    child.opacity = 0.6  # Deja las demás cartas menos opacas (no seleccionadas)
+    
+    def on_confirm(self, instance):
+        if self.selected_card is None:
+            popup = Popup(title="Error", content=Label(text="Debes seleccionar una carta para quedártela."),
+                          size_hint=(None, None), size=(300, 200))
+            popup.open()
+            return
+        
+        self.jugador_actual.mano.append(self.selected_card)
+        self.cards_drawn.remove(self.selected_card)
+        
+        self.ask_card_order()
+    
+    def ask_card_order(self):
+        """Permite al jugador elegir el orden de las cartas restantes en el mazo."""
+        content = BoxLayout(orientation='vertical', spacing=20, padding=20)  # Aumentar espaciado y padding
+        instruction_label = Label(
+            text="Selecciona la carta que irá en la última posición:",
+            size_hint=(1, None),
+            height=50,  # Ajustar la altura del texto
+            font_size='14sp',  # Reducir el tamaño del texto
+            color=(1, 1, 1, 1),  # Texto en blanco
+            valign='top',
+            halign='center'  # Centrar el texto horizontalmente
+        )
+        content.add_widget(instruction_label)
+    
+        # Layout para las cartas (centradas en el centro)
+        card_layout = BoxLayout(orientation='horizontal', spacing=20, size_hint=(1, None), height=200, pos_hint={'center_x': 0.5})
+    
+        # Crear botones de las cartas
+        for card in self.cards_drawn:
+            card_btn = Image(
+                source=card.image_source,
+                size_hint=(None, None),
+                size=(150, 200),  # Tamaño de las cartas
+                pos_hint={'center_y': 0.5}
+            )
+            # Asegurarnos de que `self` se pase correctamente dentro del lambda
+            card_btn.bind(
+                on_touch_down=lambda instance, touch, c=card: self.select_last_card(c) if instance.collide_point(*touch.pos) else None
+            )
+            card_btn.bind(
+                on_touch_move=lambda instance, touch, c=card: self.highlight_last_card(instance, touch, c) if instance.collide_point(*touch.pos) else None
+            )
+            card_btn.bind(
+                on_touch_up=lambda instance, touch, c=card: self.remove_highlight_last_card(instance, touch, c) if instance.collide_point(*touch.pos) else None
+            )
+            card_layout.add_widget(card_btn)
+        content.add_widget(card_layout)
 
+        # Crear la ventana emergente
+        self.order_popup = Popup(
+            title="Orden de cartas",
+            content=content,
+            size_hint=(None, None),
+            size=(500, 300)  # Aumentar tamaño de la ventana emergente
+        )
+        self.order_popup.open()
+
+    def highlight_last_card(self, instance, touch, card):
+        """Resalta la carta de la última posición cuando el ratón pasa sobre ella."""
+        instance.opacity = 0.8  # Hacerla un poco más transparente para resaltar
+    
+    def remove_highlight_last_card(self, instance, touch, card):
+        """Elimina el resaltado de la carta de la última posición."""
+        instance.opacity = 1  # Restablecer opacidad a su valor original
+    
+    def select_last_card(self, card):
+        """Seleccionar la carta que irá en la última posición."""
+        self.cards_drawn.remove(card)
+        self.game_screen.partida.deck.append(card)
+        self.select_second_last_card()
+    
+    def select_second_last_card(self):
+        remaining_card = self.cards_drawn[0]
+        self.game_screen.partida.deck.append(remaining_card)
+        self.order_popup.dismiss()
+        self.game_screen.log(f"{self.jugador_actual.nombre} ha devuelto las cartas al final del mazo.")
+        self.game_screen.complete_card_play(self.carta)
+        self.game_screen.next_button.disabled = False
+        self.game_screen.manager.current = 'game'
 # -----------------------------
 # Pantalla del juego (GameScreen)
 # -----------------------------
@@ -784,10 +807,6 @@ class GameScreen(Screen):
             self.show_principe_popup(self.partida.current_player, carta)
         elif carta.nombre == "Rey":
             self.show_rey_popup(self.partida.current_player, carta)
-        elif carta.nombre == "Chanceller":
-            # El Chanceller no necesita seleccionar un objetivo
-            carta_original = self.partida.current_player.mano[0] if self.partida.current_player.mano else None
-            self.show_chanciller_screen(self.partida.current_player, carta, carta_original)
         else:
             # Para cartas sin efecto que requieren selección de objetivo
             self.complete_card_play(carta)
@@ -1130,103 +1149,6 @@ class GameScreen(Screen):
         
         self.log(f"{jugador.nombre} intercambió cartas con {target.nombre}")
         self.complete_card_play(carta)
-        
-    def show_chanciller_popup(self, jugador, carta):
-        if len(self.partida.deck) < 2:
-            self.log("No hay suficientes cartas en el mazo para usar el Chanceller")
-            self.complete_card_play(carta)
-            return
-        
-        # Robar dos cartas
-        cartas_robadas = [self.partida.deck.pop(0) for _ in range(2)]
-        
-        content = BoxLayout(orientation='vertical', spacing=10, padding=10)
-        content.add_widget(Label(text="Selecciona una carta para quedarte:", font_size='18sp'))
-        
-        # Layout para los botones de cartas
-        button_box = GridLayout(cols=2, spacing=10, padding=10)
-
-        # Crear el popup antes de los botones
-        chanciller_popup = Popup(
-            title='Efecto del Chanceller',
-            content=content,
-            size_hint=(0.8, 0.8),
-            auto_dismiss=False
-        )
-
-        def on_select(carta_elegida):
-            # Quedarse con la carta elegida
-            jugador.mano = [carta_elegida]
-            
-            # Mostrar popup para ordenar las cartas a devolver
-            content_orden = BoxLayout(orientation='vertical', spacing=10, padding=10)
-            content_orden.add_widget(Label(text="Ordena las cartas para devolverlas al mazo (primera arriba):", font_size='18sp'))
-            
-            # Layout para los botones de cartas a devolver
-            button_box_orden = GridLayout(cols=1, spacing=10, padding=10)
-            cartas_devolver = [c for c in cartas_robadas if c != carta_elegida]
-            
-            orden_popup = Popup(
-                title='Ordenar cartas',
-                content=content_orden,
-                size_hint=(0.8, 0.8),
-                auto_dismiss=False
-            )
-
-            def on_orden_select(carta_orden):
-                # Devolver las cartas al mazo en el orden seleccionado
-                self.partida.deck.insert(0, carta_orden)
-                self.log(f"{jugador.nombre} ha usado el Chanceller y ha ordenado las cartas")
-                orden_popup.dismiss()
-                self.complete_card_play(carta)
-
-            for c in cartas_devolver:
-                btn = Button(
-                    text=c.nombre,
-                    size_hint_y=None,
-                    height=40,
-                    background_color=(0.6, 0.4, 0.2, 1),
-                    color=(1,1,1,1)
-                )
-                btn.bind(on_press=lambda instance, carta=c: on_orden_select(carta))
-                button_box_orden.add_widget(btn)
-
-            content_orden.add_widget(button_box_orden)
-            chanciller_popup.dismiss()
-            orden_popup.open()
-
-        # Crear botones para cada carta robada
-        for c in cartas_robadas:
-            btn = Button(
-                text=c.nombre,
-                size_hint_y=None,
-                height=40,
-                background_color=(0.6, 0.4, 0.2, 1),
-                color=(1,1,1,1)
-            )
-            btn.bind(on_press=lambda instance, carta=c: on_select(carta))
-            button_box.add_widget(btn)
-
-        content.add_widget(button_box)
-        chanciller_popup.open()
-
-    def show_chanciller_screen(self, jugador, carta, carta_original=None):
-        """
-        Muestra la pantalla para el efecto del Chanceller
-        """
-        # Robamos dos cartas adicionales del mazo
-        if len(self.partida.deck) >= 2:
-            cartas_adicionales = [self.partida.deck.pop(0) for _ in range(2)]
-        else:
-            self.log("No hay suficientes cartas en el mazo para el efecto del Chanceller")
-            self.complete_card_play(carta)
-            self.next_button.disabled = False
-            return
-        
-        # Mostramos la pantalla del Chanceller
-        chanciller_screen = self.manager.get_screen('chanciller')
-        chanciller_screen.set_context(jugador, carta, self, cartas_adicionales, carta_original)
-        self.manager.current = 'chanciller'
 
     def show_baron_screen(self, jugador, carta):
         content = BoxLayout(orientation='vertical')
@@ -1365,12 +1287,12 @@ class GameScreen(Screen):
         self.discard_pile.update_card(carta)
         
         # Manejar el efecto de la carta
-        if carta.nombre == "Chanceller":
-            # El Chanceller no necesita seleccionar un objetivo
-            carta_original = [c for c in jugador.mano if c != carta][0] if jugador.mano else None
-            self.show_chanciller_screen(jugador, carta, carta_original)
-        elif carta.nombre in ["Guardia", "Sacerdote", "Barón", "Príncipe", "Rey"]:
+        if carta.nombre in ["Guardia", "Sacerdote", "Barón", "Príncipe", "Rey"]:
             self.elegir_jugador(carta)
+        elif carta.nombre == "Chanciller":
+            chanciller_screen = self.manager.get_screen('chanciller')
+            chanciller_screen.set_context(self.partida.current_player, carta, self)
+            self.manager.current = 'chanciller'
         else:
             self.complete_card_play(carta)
 
