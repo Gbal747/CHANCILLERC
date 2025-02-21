@@ -121,7 +121,7 @@ class GuardiaScreen(Screen):
             
         # Construir botones para la selección de carta
         available_cards = ["Sacerdote", "Barón", "Doncella", "Príncipe", "Rey", 
-                         "Condesa", "Princesa", "Chanceller", "Espía"]
+                         "Condesa", "Princesa", "Chanciller", "Espía"]
         for card_name in available_cards:
             btn = Button(
                 text=card_name,
@@ -889,56 +889,103 @@ class GameScreen(Screen):
         popup.open()
 
     def show_target_card(self, jugador, target, carta):
-        """
-        Muestra la carta del jugador objetivo y completa el efecto del Sacerdote
-        """
+        """Muestra la carta del jugador objetivo en un popup con imagen y efectos visuales."""
         if not target.mano:
             self.log(f"{target.nombre} no tiene cartas en la mano")
             self.complete_card_play(carta)
             return
-            
+        
         carta_objetivo = target.mano[0]
         
-        # Obtener la pantalla actual y la pantalla del juego
-        current_screen = self.manager.current_screen
-        game_screen = self.manager.get_screen('game')
+        content = BoxLayout(orientation='vertical', spacing=10, padding=20)
         
-        content = BoxLayout(orientation='vertical', spacing=10, padding=10)
+        # Fondo semitransparente
+        with content.canvas.before:
+            Color(0, 0, 0, 0.5)
+            content.rect = Rectangle(size=content.size, pos=content.pos)
+        content.bind(size=lambda instance, value: setattr(content.rect, 'size', value))
+        content.bind(pos=lambda instance, value: setattr(content.rect, 'pos', value))
         
-        # Mostrar la carta del objetivo
-        card_image = Image(source=carta_objetivo.image_source, size_hint=(1, 0.6))
+        # Imagen de la carta centrada
+        card_image = Image(source=carta_objetivo.image_source, size_hint=(None, None), size=(200, 300), pos_hint={'center_x': 0.5})
         content.add_widget(card_image)
         
-        info_text = f"Carta de {target.nombre}:\nNombre: {carta_objetivo.nombre}\nValor: {carta_objetivo.valor}"
-        content.add_widget(Label(text=info_text, color=(0.2,0.1,0,1)))
+        # Solo mostrar el nombre del jugador
+        info_label = Label(text=target.nombre, color=(1, 1, 1, 1), font_size='20sp', bold=True)
+        content.add_widget(info_label)
         
-        # Botón para cerrar
+        # Botón de cerrar con efectos visuales
         close_btn = Button(
             text="Continuar",
             size_hint=(None, None),
             size=(200, 50),
-            pos_hint={'center_x': 0.5}
+            pos_hint={'center_x': 0.5},
+            background_color=(0.8, 0.2, 0.2, 1),
+            color=(1, 1, 1, 1)
         )
         
+        def on_press_effect(instance):
+            instance.background_color = (1, 0.5, 0.5, 1)
+        
+        def on_release_effect(instance):
+            instance.background_color = (0.8, 0.2, 0.2, 1)
+        
+        close_btn.bind(on_press=on_press_effect)
+        close_btn.bind(on_release=on_release_effect)
         content.add_widget(close_btn)
         
-        # Crear el popup antes de definir on_close para poder referenciarlo
-        target_popup = Popup(
-            title=f'Carta de {target.nombre}',
-            content=content,
-            size_hint=(0.8, 0.8),
-            auto_dismiss=False
-        )
+        popup = Popup(title=f'Carta de {target.nombre}', content=content, size_hint=(0.8, 0.8), auto_dismiss=False, background_color=(0, 0, 0, 0))
         
         def on_close(instance):
-            target_popup.dismiss()
+            popup.dismiss()
             self.log(f"{jugador.nombre} vio la carta de {target.nombre}")
-            # Volver a la pantalla del juego
             self.manager.current = 'game'
             self.complete_card_play(carta)
-            
+        
         close_btn.bind(on_press=on_close)
-        target_popup.open()
+        popup.open()
+
+    # Nueva función para mostrar el popup de victoria con animaciones
+    def show_winner_popup(self, ganador):
+        """Muestra una animación con el ganador y un botón para reiniciar la partida."""
+        content = BoxLayout(orientation='vertical', spacing=10, padding=20)
+        
+        # Fondo semitransparente para mejorar visibilidad
+        with content.canvas.before:
+            Color(0.95, 0.9, 0.8, 1)
+            content.rect = Rectangle(size=content.size, pos=content.pos)
+        content.bind(size=lambda instance, value: setattr(content.rect, 'size', value))
+        content.bind(pos=lambda instance, value: setattr(content.rect, 'pos', value))
+        
+        # Animación del nombre del ganador
+        winner_label = Label(text=f"¡{ganador.nombre} ha ganado!", font_size='24sp', bold=True, color=(1, 1, 0, 1))
+        anim = Animation(font_size=30, duration=0.5) + Animation(font_size=24, duration=0.5)
+        anim.repeat = True
+        anim.start(winner_label)
+        content.add_widget(winner_label)
+    
+        # Botón para reiniciar la partida
+        restart_btn = Button(
+            text="Jugar de nuevo",
+            size_hint=(None, None),
+            size=(200, 50),
+            pos_hint={'center_x': 0.5},
+            background_color=(0.2, 0.6, 0.2, 1),
+            color=(1, 1, 1, 1)
+        )
+        
+        def restart_game(instance):
+            popup.dismiss()
+            setup_screen = self.manager.get_screen('setup')
+            setup_screen.build_initial_ui()  # Reiniciar la interfaz de selección de jugadores
+            self.manager.current = 'setup'
+        
+        restart_btn.bind(on_press=restart_game)
+        content.add_widget(restart_btn)
+        
+        popup = Popup(title='¡Victoria!', content=content, size_hint=(0.8, 0.8), auto_dismiss=False, background_color=(0, 0, 0, 0))
+        popup.open()
+
 
     def show_baron_popup(self, jugador, carta):
         targets = [j for j in self.partida.jugadores if j != jugador and not j.eliminado and not j.protegido]
@@ -1001,7 +1048,6 @@ class GameScreen(Screen):
                 self.log("Empate, nadie es eliminado")
         else:
             self.log(f"{target.nombre} no tiene cartas para comparar")
-        popup.dismiss()
         self.card_played = True
         self.complete_card_play(carta)
 
